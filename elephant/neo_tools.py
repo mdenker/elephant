@@ -147,6 +147,34 @@ def get_all_spiketrains(container):
     return _get_all_objs(container, 'SpikeTrain')
 
 
+def get_all_analogsignals(container):
+    """
+    Get all `neo.AnalogSignal` objects from a container.
+
+    The objects can be any list, dict, or other iterable or mapping containing
+    analogsignal objects, as well as any neo object that can hold
+    analogsignals:
+    `neo.Block`, `neo.RecordingChannelGroup`, `neo.RecordingChannel` and
+    `neo.Segment`.
+
+    Containers are searched recursively, so the objects can be nested
+    (such as a list of blocks).
+
+    Parameters
+    ----------
+    container : list, tuple, iterable, dict,
+                neo Block, neo Segment, neo Unit, neo RecordingChannelGroup
+                The container for the AnalogSignal objects.
+
+    Returns
+    -------
+    list : list of `neo.AnalogSignal` objects
+        A list of the unique `neo.AnalogSignal` objects in `container`.
+    """
+
+    return _get_all_objs(container, 'AnalogSignal')
+
+
 def get_all_events(container):
     """Get all `neo.Event` objects from a container.
 
@@ -197,3 +225,100 @@ def get_all_epochs(container):
 
     """
     return _get_all_objs(container, 'Epoch')
+
+
+def get_all_units(container):
+    """
+    Get all `neo.Unit` objects from a container.
+
+    The objects can be any list, dict, or other iterable or mapping containing
+    units, as well as any neo object that can hold epochs:
+    `neo.Block` and `neo.Segment`.
+
+    Containers are searched recursively, so the objects can be nested
+    (such as a list of blocks).
+
+    Parameters
+    ----------
+    container : list, tuple, iterable, dict, neo Block, neo Segment
+        The container for the epochs.
+
+    Returns
+    -------
+    list : list of `neo.Unit` objects
+        A list of the unique `neo.Unit` objects in `container`.
+    """
+    return _get_all_objs(container, 'Unit')
+
+
+def get_all_segments(container):
+    """
+    Get all `neo.Segment` objects from a container.
+
+    The objects can be any list, dict, or other iterable or mapping containing
+    epochs, as well as any neo object that can hold epochs:
+    `neo.Block`.
+
+    Containers are searched recursively, so the objects can be nested
+    (such as a list of blocks).
+
+    Parameters
+    ----------
+    container : list, tuple, iterable, dict, neo Block, neo Segment
+        The container for the epochs.
+
+    Returns
+    -------
+    list : list of `neo.Segment` objects
+        A list of the unique `neo.Segment` objects in `container`.
+    """
+    return _get_all_objs(container, 'Segment')
+
+
+def get_all_recordingchannels(container):
+    """
+    Get all `neo.RecordingChannel` objects from a container.
+
+    The objects can be any list, dict, or other iterable or mapping containing
+    epochs, as well as any neo object that can hold epochs:
+    `neo.Block` and `neo.RecordingChannelGroup`.
+
+    Containers are searched recursively, so the objects can be nested
+    (such as a list of blocks).
+
+    Parameters
+    ----------
+    container : list, tuple, iterable, dict, neo Block, neo Segment
+        The container for the epochs.
+
+    Returns
+    -------
+    list : list of `neo.RecordingChannel` objects
+        A list of the unique `neo.Epoch` objects in `container`.
+    """
+    return _get_all_objs(container, 'RecordingChannel')
+
+
+def get_all_recordingchannelgroups(container):
+    """
+    Get all `neo.RecordingChannelGroup` objects from a container.
+
+    The objects can be any list, dict, or other iterable or mapping containing
+    epochs, as well as any neo object that can hold epochs:
+    `neo.Block`.
+
+    Containers are searched recursively, so the objects can be nested
+    (such as a list of blocks).
+
+    Parameters
+    ----------
+    container : list, tuple, iterable, dict, neo Block, neo Segment
+        The container for the epochs.
+
+    Returns
+    -------
+    list : list of `neo.RecordingChannelGroup` objects
+        A list of the unique `neo.RecordingChannelGroup` objects in
+        `container`.
+    """
+    return _get_all_objs(container, 'RecordingChannelGroup')
