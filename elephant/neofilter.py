@@ -1,5 +1,6 @@
 import elephant.conditions as conditions
 import types
+import numpy as np
 from neo.core.container import unique_objs
 
 
@@ -19,7 +20,7 @@ class NeoFilter(object):
         """
         Parameters
         ----------
-        input : neo Object
+        container : neo Object
             An arbitrary neo Object to analyze.
         apply_func: function
             A user-defined filter-function which is applied to given input.
@@ -31,13 +32,19 @@ class NeoFilter(object):
         # List of filtered object
         self._filt_obj = []
         if apply_func is not None:
-            self.__apply_function(apply_func)
+            self.apply_function(apply_func)
         if kwargs is not None:
             self.set_conditions(**kwargs)
 
-    def __apply_function(self, func):
+    def apply_function(self, func):
         # TODO allow a list of functions
-        self._filt_obj.append(func(self._input))
+        filt_res = func(self._input)
+        if filt_res:
+            self._filt_obj = self.__intersect_hash(filt_res,
+                                                   self._filt_obj)
+        # Conditions does not hold
+        else:
+            self._filt_obj = []
 
     def __set_default_conditions(self):
         # Get all module function names
@@ -78,43 +85,52 @@ class NeoFilter(object):
         """
         Resets the conditions to default state.
 
-        Resets the values of the condition dictionary and the to the default state.
+        Resets the values of the condition dictionary and the to the default
+        state.
 
         See also:
         __set_default_conditions : The method reset_trial_condition calls the
         __set_default_conditions() method to reset above mentioned dictionaries
-        to default their state.
+        to their default state.
         """
         self._d_conditions.clear()
         del self._filt_obj[:]
         self.__set_default_conditions()
 
     def __apply_conditions(self, _input=None):
+        # For user defined filter method
         if not _input:
             _input = self._input
-        first_filter = True
+        # first_filter = True
         for key in self._d_conditions:
             if self._d_conditions[key][0]:
                 # Get corresponding func from module
                 func = getattr(conditions, key)
-                if first_filter:
-                    # Assume for a function with two parameter as input
-                    try:
-                        filt_res = func(_input,
-                                        **self._d_conditions[key][1])
-                        first_filter = False
-                    # If the function does not support more than one parameter
-                    except IndexError:
-                        filt_res = func(_input)
-                else:
-                    try:
-                        filt_res = func(self._filt_obj,
-                                        **self._d_conditions[key][1])
-                    except IndexError:
-                        filt_res = func(self._filt_obj)
+                # if first_filter:
+                #     # Assume for a function with two parameter as input
+                #     try:
+                #         filt_res = func(_input,
+                #                         **self._d_conditions[key][1])
+                #         first_filter = False
+                #     # If the function does not support more than one parameter
+                #     except IndexError:
+                #         filt_res = func(_input)
+                # else:
+                #     try:
+                #         filt_res = func(self._filt_obj,
+                #                         **self._d_conditions[key][1])
+                #     except IndexError:
+                #         filt_res = func(self._filt_obj)
+                try:
+                    filt_res = func(self._input,
+                                    **self._d_conditions[key][1])
+                except IndexError:
+                    filt_res = func(self._input)
                 # if filt_res not in self._filt_obj and filt_res:
                 if filt_res:
-                    self._filt_obj.append(filt_res)
+                    self._filt_obj = self.__intersect_hash(filt_res,
+                                                           self._filt_obj)
+                    # self._filt_obj.extend(filt_res)
                 # Conditions does not hold
                 else:
                     self._filt_obj = []
@@ -139,12 +155,73 @@ class NeoFilter(object):
     @property
     def filtered(self):
         """
-        Returns a list of filtered neo objects.
+        Returns a list of filtered, unique neo objects.
 
         Returns
         -------
         filtered : list of neo.core objects
-            Returns the filtered list of objects in a list.
+            Returns the filtered list of unique objects in a list.
         """
-        return unique_objs(
-            [item for sublist in self._filt_obj for item in sublist])
+        # return unique_objs(
+        #     [item for sublist in self._filt_obj for item in sublist])
+        return unique_objs([item for item in self._filt_obj])
+
+    @staticmethod
+    def __same_length(result, lst):
+        if lst:
+            if len(result) == len(lst):
+                return True
+            else:
+                return False
+        return True
+
+    @staticmethod
+    def __intersect(inp, lst):
+        result = []
+        if lst:
+            for i in lst:
+                take = False
+                tmp = None
+                for j in inp:
+                    if type(j) == type(i):
+                        take = True
+                        tmp = j
+                        break
+                if take:
+                    result.append(i)
+                    if i is not tmp:
+                        result.append(tmp)
+        else:
+            result.extend(inp)
+        return result
+
+    @staticmethod
+    def __intersect_hash(a, b):
+        """
+        Intersects two lists **type** based using a hash-table for look-ups.
+
+        Parameters
+        ----------
+        a : list
+            Actual filtered results list
+        b: list
+            List from prior filtered results
+
+        Returns
+        -------
+        result : list
+            A list which only includes intersected objects.
+        """
+        result = []
+        if b:
+            # Transform a to hash-table/dictionary
+            ht = {}
+            for i in a:
+                if not type(i) in ht:
+                    ht[type(i)] = type(i)
+            for j in b:
+                if type(j) in ht:
+                    result.append(j)
+        else:
+            result.extend(a)
+        return result

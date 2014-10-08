@@ -13,7 +13,6 @@ from neo.core import Block, Segment, AnalogSignal, SpikeTrain, Unit, \
 class NeoFilterTestCase(unittest.TestCase):
     def setUp(self):
         self.blk1 = Block()
-        self.blk3 = Block()
         self.unit = Unit()
         self.rcg = RecordingChannelGroup(name='all channels')
         self.setup_block()
@@ -215,6 +214,19 @@ class NeoFilterTestCase(unittest.TestCase):
         nfilt = NeoFilter([])
         nfilt.set_conditions(data_aligned=(True, ))
         self.assertEqual(nfilt.filtered, [])
+
+    def test_user_function(self):
+        def add_one(container):
+            import elephant.neo_tools as nt
+            spkt = nt.get_all_spiketrains(container)
+            return [st + 1 * st.units for st in spkt]
+        self.nf.apply_function(add_one)
+        sts = [st + 1 * st.units for st in
+               self.blk1.list_children_by_class('SpikeTrain')]
+        self.assertTrue(np.array_equal(self.nf.filtered, sts))
+
+        self.nf.set_conditions(at_least_n_trains=(True, {'n': 2}))
+        self.assertTrue(np.array_equal(self.nf.filtered, sts))
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(NeoFilterTestCase)

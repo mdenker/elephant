@@ -381,7 +381,7 @@ def signals_no_overlap(container, take_first=False):
                 raise ValueError("No min start, max stop times found.")
             trials_time[tr_id] = (min_start, max_stop)
         # Store in list
-        tr_time_lst = trials_time.items()
+        tr_time_lst = list(trials_time.items())
         # Order items according to smallest start time
         # Result is a sorted list of following form: (int, (int, int))
         # sorting by first item in tuple
