@@ -1,4 +1,4 @@
-import elephant.neo_tools as nt
+import jelephant.core.neo_tools as nt
 import numpy as np
 import neo
 
@@ -166,8 +166,12 @@ def at_least_n_units(container, n):
     list : list of `neo.core.Unit` objects.
 
     """
+    if n < 1:
+        raise ValueError(
+            "Please provide a number greater than %d, when setting "
+            "the condition for a minimal number of Units." % n)
     units = nt.get_all_units(container)
-    return units if filter(lambda x: np.size(x) >= n, units) else []
+    return units if len(units) >= n else []
 
 
 def exact_n_units(container, n):
@@ -187,8 +191,12 @@ def exact_n_units(container, n):
     list : list of `neo.core.Unit` objects.
 
     """
+    if n < 1:
+        raise ValueError(
+            "Please provide a number greater than %d, when setting "
+            "the condition for exact number of Units." % n)
     units = nt.get_all_units(container)
-    return units if filter(lambda x: np.size(x) == n, units) else []
+    return units if len(units) == n else []
 
 
 def at_least_n_recordingchannels(container, n):
@@ -208,13 +216,17 @@ def at_least_n_recordingchannels(container, n):
     list : list of `neo.core.RecordingChannel` objects.
 
     """
+    if n < 1:
+        raise ValueError(
+            "Please provide a number greater than %d, when setting "
+            "the condition for a minimal number of RecordingChannels." % n)
     rcs = nt.get_all_recordingchannels(container)
-    return rcs if filter(lambda x: np.size(x) >= n, rcs) else []
+    return rcs if len(rcs) >= n else []
 
 
 def exact_n_recordingchannels(container, n):
     """
-    Given input is checked if it has excatly `n` **neo.core.RecordingChannel**
+    Given input is checked if it has exactly `n` **neo.core.RecordingChannel**
     objects.
 
     Parameters
@@ -229,8 +241,12 @@ def exact_n_recordingchannels(container, n):
     list : list of `neo.core.RecordingChannel` objects.
 
     """
+    if n < 1:
+        raise ValueError(
+            "Please provide a number greater than %d, when setting "
+            "the condition for exact number of RecordingChannels." % n)
     rcs = nt.get_all_recordingchannels(container)
-    return rcs if filter(lambda x: np.size(x) == n, rcs) else []
+    return rcs if len(rcs) == n else []
 
 
 def contains_each_recordingchannel(container):
@@ -245,12 +261,15 @@ def contains_each_recordingchannel(container):
 
     Returns
     -------
+    sigs : list of neo.core.AnalogSignals
+        List of `neo.core.AnalogSignal` objects with a link to each
+        `neo.core.RecordingChannel`
 
     """
     rcs = nt.get_all_recordingchannels(container)
     sigs = nt.get_all_analogsignals(container)
     return [sig for sig in
-            filter(lambda sig: sig.recordingchannel in rcs, sigs)]
+            filter(lambda signal: signal.recordingchannel in rcs, sigs)]
 
 
 def contains_each_unit(container):
@@ -265,11 +284,13 @@ def contains_each_unit(container):
 
     Returns
     -------
-
+    sts : list of neo.core.SpikeTrain objects
+        List of `neo.core.SpikeTrain` objects with a link to each neo.core.Unit
     """
     units = nt.get_all_units(container)
     sts = nt.get_all_spiketrains(container)
-    return units if filter(lambda st: st.units in units, sts) else []
+    return [spk for spk in
+            filter(lambda st: st.unit in units, sts)]
 
 
 def data_aligned(container):
@@ -289,7 +310,8 @@ def data_aligned(container):
     Returns
     -------
     sigs, sts: `neo.core.AnalogSignal` and `neo.core.SpikeTrain` objects
-
+        All time aligned objects regarding the same start and stop time
+        are returned.
     """
     as_time_list = []
     st_time_list = []
@@ -301,8 +323,10 @@ def data_aligned(container):
     except TypeError:
         if sts:
             sigs = []
+            sts = nt.get_all_spiketrains(container)
         else:
             sts = []
+            sigs = nt.get_all_analogsignals(container)
     # Empty signals
     if not (sts or sigs):
         return []

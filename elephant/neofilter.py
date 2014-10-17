@@ -1,6 +1,5 @@
-import elephant.conditions as conditions
+import jelephant.core.conditions as conditions
 import types
-import numpy as np
 from neo.core.container import unique_objs
 
 
@@ -134,6 +133,7 @@ class NeoFilter(object):
                 # Conditions does not hold
                 else:
                     self._filt_obj = []
+                    return
 
     @property
     def conditions(self):
@@ -166,34 +166,26 @@ class NeoFilter(object):
         #     [item for sublist in self._filt_obj for item in sublist])
         return unique_objs([item for item in self._filt_obj])
 
-    @staticmethod
-    def __same_length(result, lst):
-        if lst:
-            if len(result) == len(lst):
-                return True
-            else:
-                return False
-        return True
-
-    @staticmethod
-    def __intersect(inp, lst):
-        result = []
-        if lst:
-            for i in lst:
-                take = False
-                tmp = None
-                for j in inp:
-                    if type(j) == type(i):
-                        take = True
-                        tmp = j
-                        break
-                if take:
-                    result.append(i)
-                    if i is not tmp:
-                        result.append(tmp)
-        else:
-            result.extend(inp)
-        return result
+    # @staticmethod
+    # TODO Remove or check if this method is faster, should not
+    # def __intersect(inp, lst):
+    #     result = []
+    #     if lst:
+    #         for i in lst:
+    #             take = False
+    #             tmp = None
+    #             for j in inp:
+    #                 if type(j) == type(i):
+    #                     take = True
+    #                     tmp = j
+    #                     break
+    #             if take:
+    #                 result.append(i)
+    #                 if i is not tmp:
+    #                     result.append(tmp)
+    #     else:
+    #         result.extend(inp)
+    #     return result
 
     @staticmethod
     def __intersect_hash(a, b):
