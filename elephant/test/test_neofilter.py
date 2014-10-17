@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import unittest
 import numpy as np
 import quantities as pq
-from jelephant.core.neofilter import NeoFilter
+from elephant.neofilter import NeoFilter
 from neo.core import Block, Segment, AnalogSignal, SpikeTrain, Unit, \
     RecordingChannelGroup, RecordingChannel
 
@@ -284,7 +284,7 @@ class NeoFilterTestCase(unittest.TestCase):
         self.assertEqual(nf2.filtered, [])
 
         # Test out a 'user' function with an empty block
-        from jelephant.core.conditions import data_aligned
+        from elephant.conditions import data_aligned
         nf2 = NeoFilter(blk2, data_aligned)
         self.assertEqual(nf2.filtered, [])
 
@@ -386,7 +386,7 @@ class NeoFilterTestCase(unittest.TestCase):
 
     def test_user_function(self):
         def add_one(container):
-            import jelephant.core.neo_tools as nt
+            import elephant.neo_tools as nt
             spkt = nt.get_all_spiketrains(container)
             return [spt + 1 * spt.units for spt in spkt]
         self.nf.apply_function(add_one)

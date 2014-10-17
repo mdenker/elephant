@@ -1,4 +1,4 @@
-import jelephant.core.conditions as conditions
+import elephant.conditions as conditions
 import types
 from neo.core.container import unique_objs
 
