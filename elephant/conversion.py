@@ -790,3 +790,34 @@ class BinnedSpikeTrain(object):
             for inner_elem in filled:
                 lil_mat[idx, inner_elem] += 1
         self._sparse_mat_u = lil_mat.tocsr()
+
+
+def binary_matrix_to_spiketrains(matrix, t_start, t_stop):
+    """
+    Converts a binary numpy 2D array to a list of neo.SpikeTrain objects.
+
+    Parameters
+    ----------
+    matrix : numpy.ndarray
+        A 2D array which is converted to a list of neo.SpikeTrain objects
+    t_start : quantities.Quantity or list of quantities.Quantity objects
+        Start point(s) of spiketrain(s). The order in the list must
+        correspond to the list of spiketrains.
+    t_stop : quantities.Quantity list of quantities.Quantity objects
+        Stop point(s) of spiketrain(s). The order in the list must
+        correspond to the list of spiketrains
+
+    Returns
+    -------
+    list : list of neo.SpikeTrain objects
+        From numpy array converted list of neo.SpikeTrain objects.
+    """
+    # Make array
+    if isinstance(t_start, pq.Quantity) or isinstance(t_stop, pq.Quantity):
+        t_start = np.array([t_start for _ in range(len(matrix))]) * t_start.units
+        t_stop = np.array([t_stop for _ in range(len(matrix))]) * t_stop.units
+    assert all((elem.units == t_stop[i].units) for i, elem in enumerate(
+        t_start)), 'Units of t_start and t_stop are not of same time.'
+    return [neo.SpikeTrain(row * t_start[idx].units, t_start=t_start[idx],
+                           t_stop=t_stop[idx]) for idx, row in
+            enumerate(matrix)]

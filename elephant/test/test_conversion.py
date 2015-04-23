@@ -500,6 +500,29 @@ class TimeHistogramTestCase(unittest.TestCase):
             np.array_equal(xa.bin_edges[:-1],
                            xb.bin_edges[:-1].rescale(binsize.units)))
 
+    def test_binary_matrix_to_binned(self):
+        a = np.zeros((5, 10))
+        sts = cv.binary_matrix_to_spiketrains(a, t_start=0 * pq.s,
+                                              t_stop=10 * pq.s)
+        x = cv.BinnedSpikeTrain(sts, binsize=1 * pq.s)
+        targ = [[10, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 5
+        targ = np.array(targ)
+        self.assertTrue(np.array_equal(targ, x.to_array()))
+
+        a = np.ones((5, 10))
+        zeros = [0 * pq.s] * 5
+        ones = [10 * pq.s] * 5
+        sts = cv.binary_matrix_to_spiketrains(a, t_start=zeros,
+                                              t_stop=ones)
+        x = cv.BinnedSpikeTrain(sts, binsize=1 * pq.s)
+        targ = [[0, 10, 0, 0, 0, 0, 0, 0, 0, 0]] * 5
+        targ = np.array(targ)
+        self.assertTrue(np.array_equal(targ, x.to_array()))
+
+    def test_binary_matrix_to_binned_error(self):
+        a = np.zeros((5, 10))
+        self.assertRaises(AssertionError, cv.binary_matrix_to_spiketrains,
+                          a, t_start=0 * pq.s, t_stop=10 * pq.ms)
 
 if __name__ == '__main__':
     unittest.main()
