@@ -124,28 +124,27 @@ def inv_hash(h,N,base=2):
             i-=1
     return m        
 
-def N_emp_mat(mat, orientation, pattern_hash):
+def N_emp_mat(mat,N, pattern_hash,base=2):
     """
     Calculates empirical number of observed patterns expressed by their hash values
     
     Parameters:
     -----------
     m [int. | iterable]:
-           matrix of 0-1 patterns as columns, shape: (number of neurons, number of patterns)
-    orientation [string | "row" or "col" ]:
-           "row": orientation of patterns in the matrix m along the rows
-           "col": orientation of patterns in the matrix m along the columns
+           matrix of 0-1 patterns as columns, shape: (number of neurons N, number of patterns)
+    N [int.]:
+           number of neurons
     pattern_hash [int. | iterable ]:
             array of hash values. Length defines number of patterns
     
-
+    base 
     Returns:
     --------
     N_emp [int. | iterable]:
            empirical number of each observed pattern. Same length as pattern_hash 
     indices [list of list | iterable]:
            list of indices of mat per entry of pattern_hash. indices[i] = N_emp[i] = pattern_hash[i] 
-    
+
     Raises:
     -------
        ValueError: if mat is not zero-one matrix
@@ -155,20 +154,17 @@ def N_emp_mat(mat, orientation, pattern_hash):
     >>> mat = np.array([[1, 0, 0, 1, 1],
                         [1, 0, 0, 1, 0]])
     >>> pattern_hash = np.array([1,3])
-    >>> N_emp(mat, pattern_hash)
-    >>> n_emp = N_emp(mat, pattern_hash)[0]
-    >>> n_emp_idx = N_emp(mat, pattern_hash)[1]
+    >>> n_emp, n_emp_indices = N_emp_mat(mat, N,pattern_hash)
     >>> print n_emp
     [ 1.  2.]
-    >>> print n_emp_idx
+    >>> print n_emp_indices
     [array([4]), array([0, 3])]
     """
     # check if the mat is zero-one matrix
     if np.any(mat>1) or np.any(mat<0):
         raise "ValueError: entries of mat should be either one or zero"
-    h = hash(mat)
-    num_patt = len(pattern_hash)
-    N_emp = np.zeros(num_patt)
+    h = hash(mat,N,base = base)
+    N_emp = np.zeros(len(pattern_hash))
     indices = []
     for p_h_idx, p_h in enumerate(pattern_hash):
         indices_tmp = np.nonzero(h == p_h)[0]

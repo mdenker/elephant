@@ -72,6 +72,18 @@ class UETestCase(unittest.TestCase):
         m1 = ue.inv_hash(inv_h, N = 8)
         self.assertTrue(np.all(m == m1))
 
+    def test_N_emp_mat_default(self):
+        mat = np.array([[0, 0, 0, 1, 1],[0, 0, 0, 0, 1],[1, 0, 1, 1, 1],[1, 0, 1, 1, 1]])
+        N = 4
+        pattern_hash = [3, 15]
+        expected1 = np.array([ 2.,  1.])
+        expected2 = [[0, 2], [4]]
+        nemp,nemp_indices = ue.N_emp_mat(mat,N,pattern_hash)
+        self.assertTrue(np.all(nemp == expected1))
+        for item_cnt,item in enumerate(nemp_indices):
+            self.assertTrue(np.allclose(expected2[item_cnt],item))
+
+
 def suite():
     suite = unittest.makeSuite(UETestCase, 'test')
     return suite
