@@ -792,13 +792,13 @@ class BinnedSpikeTrain(object):
         self._sparse_mat_u = lil_mat.tocsr()
 
 
-def binary_matrix_to_spiketrains(matrix, t_start, t_stop):
+def binary_matrix_to_spiketrains(binary_matrix, t_start, t_stop):
     """
     Converts a binary numpy 2D array to a list of neo.SpikeTrain objects.
 
     Parameters
     ----------
-    matrix : numpy.ndarray
+    binary_matrix : numpy.ndarray
         A 2D array which is converted to a list of neo.SpikeTrain objects
     t_start : quantities.Quantity or list of quantities.Quantity objects
         Start point(s) of spiketrain(s). The order in the list must
@@ -811,13 +811,36 @@ def binary_matrix_to_spiketrains(matrix, t_start, t_stop):
     -------
     list : list of neo.SpikeTrain objects
         From numpy array converted list of neo.SpikeTrain objects.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from elephant.conversion import binary_matrix_to_spiketrains
+    >>> import quantities as pq
+
+    >>> x = np.zeros((5, 10))
+    >>> sts = binary_matrix_to_spiketrains(x, t_start=[0*pq.s]*5, t_stop=[10*pq.s]*5)
+    >>> print(sts[0])
+    [ 0.  0.  0.  0.  0.  0.  0.  0.  0.  0.] s
+
+
     """
     # Make array
     if isinstance(t_start, pq.Quantity) or isinstance(t_stop, pq.Quantity):
-        t_start = np.array([t_start for _ in range(len(matrix))]) * t_start.units
-        t_stop = np.array([t_stop for _ in range(len(matrix))]) * t_stop.units
+        t_start = np.array([t_start for _ in range(len(binary_matrix))]) * t_start.units
+        t_stop = np.array([t_stop for _ in range(len(binary_matrix))]) * t_stop.units
+    if not _check_binary_matrix(binary_matrix):
+        raise AssertionError('Given matrix is not binary')
     assert all((elem.units == t_stop[i].units) for i, elem in enumerate(
         t_start)), 'Units of t_start and t_stop are not of same time.'
     return [neo.SpikeTrain(row * t_start[idx].units, t_start=t_start[idx],
                            t_stop=t_stop[idx]) for idx, row in
-            enumerate(matrix)]
+            enumerate(binary_matrix)]
+
+
+def _check_binary_matrix(binary_matrix):
+    """ Checks if given matrix is binary """
+    for row in binary_matrix:
+        if not len(np.where(row == 1)[0]) == np.count_nonzero(row):
+            return False
+    return True

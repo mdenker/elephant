@@ -520,9 +520,15 @@ class TimeHistogramTestCase(unittest.TestCase):
         self.assertTrue(np.array_equal(targ, x.to_array()))
 
     def test_binary_matrix_to_binned_error(self):
+        # Check for different quantities as start and end points
         a = np.zeros((5, 10))
         self.assertRaises(AssertionError, cv.binary_matrix_to_spiketrains,
                           a, t_start=0 * pq.s, t_stop=10 * pq.ms)
+
+        # Test for non binary matrix
+        a = np.array(([2, 3, 4, 1, 0], [1, 1, 0, 0]))
+        self.assertRaises(AssertionError, cv.binary_matrix_to_spiketrains,
+                          a, t_start=0 * pq.s, t_stop=10 * pq.s)
 
 if __name__ == '__main__':
     unittest.main()
