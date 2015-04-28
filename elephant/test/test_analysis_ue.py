@@ -12,38 +12,32 @@ import elephant.ue_utils as ue
 
 class UETestCase(unittest.TestCase):
     
-    def test_hash_default_orientation_col(self):
+    def test_hash_default(self):
         m = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
                       [1,0,1],[0,1,1],[1,1,1]])
         expected = np.array([77,43,23])
-        h = ue.hash(m,orientation = "col")
-        self.assertTrue(np.all(expected == h))
-
-    def test_hash_default_orientation_row(self):
-        m = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
-                      [1,0,1],[0,1,1],[1,1,1]])
-        expected = np.array([0,4,2,1,6,5,3,7])
-        h = ue.hash(m,orientation = "row")
+        h = ue.hash(m,N=8)
         self.assertTrue(np.all(expected == h))
 
     def test_hash_default_longpattern(self):
         m = np.zeros((100,2))
         m[0,0] = 1
         expected = np.array([2**99,0])
-        h = ue.hash(m,orientation = "col")
+        h = ue.hash(m,N=100)
         self.assertTrue(np.all(expected == h))
 
     def test_hash_ValueError(self):
         m = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
                       [1,0,1],[0,1,1],[1,1,1]])
-        self.assertRaises(ValueError,ue.hash,m,'cols')
+        self.assertRaises(ValueError,ue.hash,m,N=3)
 
     def test_hash_base_not_two(self):
         m = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
                       [1,0,1],[0,1,1],[1,1,1]])
+        m = m.T
         base = 3
         expected = np.array([0,9,3,1,12,10,4,13])
-        h = ue.hash(m,orientation = 'row',base=base)
+        h = ue.hash(m,N=3,base=base)
         self.assertTrue(np.all(expected == h))
 
     ## TODO: write a test for ValueError in inv_hash
@@ -74,15 +68,9 @@ class UETestCase(unittest.TestCase):
 
     def test_hash_invhash_consistency(self):
         m = np.array([[0, 0, 0],[1, 0, 0],[0, 1, 0],[0, 0, 1],[1, 1, 0],[1, 0, 1],[0, 1, 1],[1, 1, 1]])
-        inv_h = ue.hash(m,orientation = 'col')
+        inv_h = ue.hash(m,N=8)
         m1 = ue.inv_hash(inv_h, N = 8)
         self.assertTrue(np.all(m == m1))
-
-    def test_hash_invhash_consistency_orientation_rows(self):
-        m = np.array([[0, 0, 0],[1, 0, 0],[0, 1, 0],[0, 0, 1],[1, 1, 0],[1, 0, 1],[0, 1, 1],[1, 1, 1]])
-        inv_h = ue.hash(m,orientation = 'row')
-        m1 = ue.inv_hash(inv_h, N = 3)
-        self.assertTrue(np.all(m.T == m1))
 
 def suite():
     suite = unittest.makeSuite(UETestCase, 'test')

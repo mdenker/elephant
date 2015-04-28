@@ -9,7 +9,7 @@ import neo
 import warnings
 
 
-def hash(m, orientation, base=2):
+def hash(m, N, base=2):
     """
     Calculate for a spike pattern or a matrix of spike patterns (provide each pattern as a column)
     composed of N neurons a unique number.
@@ -19,10 +19,8 @@ def hash(m, orientation, base=2):
     -----------
     m [int. | iterable]:
            matrix of 0-1 patterns as columns, shape: (number of neurons, number of patterns)
-    orientation [string | "row" or "col" ]:
-           "row": orientation of patterns in the matrix m along the rows
-           "col": orientation of patterns in the matrix m along the columns
-    
+    N [int. ]:
+           number of neurons is required to be equal to the number of rows
     base [int. default to 2]: 
     ### TODO:  write the technical number
            base for calculation of the exponentialsequen
@@ -43,31 +41,23 @@ def hash(m, orientation, base=2):
     m = [0
          1
          1]
-    orientation = 'col'
+    N = 3
     base = 2
     hash = 0*2^2 + 1*2^1 + 1*2^0 = 3
 
     second example:
     >>> import numpy as np
-    >>> m = array([[0, 0, 0],
-               [1, 0, 0],
-               [0, 1, 0],
-               [0, 0, 1],
-               [1, 1, 0],
-               [1, 0, 1],
-               [0, 1, 1],
-               [1, 1, 1]])
-    >>> hash(m,orientation = 'row')
+    >>> m = np.array([[0, 1, 0, 0, 1, 1, 0, 1],
+                         [0, 0, 1, 0, 1, 0, 1, 1],
+                         [0, 0, 0, 1, 0, 1, 1, 1]])
+    
+    >>> hash(m,N=3)
     Out[1]: array([0, 4, 2, 1, 6, 5, 3, 7])
     """
     # check the consistency between shape of m and number neurons N
-    if orientation == "row":
-        N = np.shape(m)[1]
-        m = m.T
-    elif orientation == "col":
-        N = np.shape(m)[0]
-    else:
-        raise ValueError('provide "col" or "row" as orientation of pattern representation in m' )
+    if N != np.shape(m)[0]:
+        raise ValueError('patterns in the matrix should be column entries')
+
 
     # generate the representation for binary system
     #XXX what happens if the pattern is longer than 63?
@@ -102,9 +92,9 @@ def inv_hash(h,N,base=2):
     Returns:
     --------
        numpy.array:
-           An matrix of shape: (N, number of patterns)
+           A matrix of shape: (N, number of patterns)
 
-    Examples:
+    Examples
     ---------
     >>> import numpy as np
     >>> h = np.array([3,7])
@@ -134,4 +124,56 @@ def inv_hash(h,N,base=2):
             i-=1
     return m        
 
+def N_emp_mat(mat, orientation, pattern_hash):
+    """
+    Calculates empirical number of observed patterns expressed by their hash values
+    
+    Parameters:
+    -----------
+    m [int. | iterable]:
+           matrix of 0-1 patterns as columns, shape: (number of neurons, number of patterns)
+    orientation [string | "row" or "col" ]:
+           "row": orientation of patterns in the matrix m along the rows
+           "col": orientation of patterns in the matrix m along the columns
+    pattern_hash [int. | iterable ]:
+            array of hash values. Length defines number of patterns
+    
+
+    Returns:
+    --------
+    N_emp [int. | iterable]:
+           empirical number of each observed pattern. Same length as pattern_hash 
+    indices [list of list | iterable]:
+           list of indices of mat per entry of pattern_hash. indices[i] = N_emp[i] = pattern_hash[i] 
+    
+    Raises:
+    -------
+       ValueError: if mat is not zero-one matrix
+       
+    Examples:
+    ---------
+    >>> mat = np.array([[1, 0, 0, 1, 1],
+                        [1, 0, 0, 1, 0]])
+    >>> pattern_hash = np.array([1,3])
+    >>> N_emp(mat, pattern_hash)
+    >>> n_emp = N_emp(mat, pattern_hash)[0]
+    >>> n_emp_idx = N_emp(mat, pattern_hash)[1]
+    >>> print n_emp
+    [ 1.  2.]
+    >>> print n_emp_idx
+    [array([4]), array([0, 3])]
+    """
+    # check if the mat is zero-one matrix
+    if np.any(mat>1) or np.any(mat<0):
+        raise "ValueError: entries of mat should be either one or zero"
+    h = hash(mat)
+    num_patt = len(pattern_hash)
+    N_emp = np.zeros(num_patt)
+    indices = []
+    for p_h_idx, p_h in enumerate(pattern_hash):
+        indices_tmp = np.nonzero(h == p_h)[0]
+        indices.append(indices_tmp)
+        N_emp_tmp = len(indices_tmp)
+        N_emp[p_h_idx] = N_emp_tmp
+    return N_emp, indices
 
