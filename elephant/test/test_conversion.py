@@ -519,7 +519,8 @@ class TimeHistogramTestCase(unittest.TestCase):
 
     def test_binary_matrix_to_binned_corner_cases(self):
         a = [[1, 0, 1, 0, 1, 1], [0, 0, 1, 0, 1, 1], [0, 0, 1, 0, 0, 0]]
-        sts = cv.binary_matrix_to_spiketrains(a, t_start=0 * pq.s, t_stop=6 * pq.s)
+        sts = cv.binary_matrix_to_spiketrains(a, t_start=0 * pq.s,
+                                              t_stop=6 * pq.s)
         x = cv.BinnedSpikeTrain(sts, num_bins=6)
         targ = [[2, 4, 0, 0, 0, 0],
                 [3, 3, 0, 0, 0, 0],
@@ -527,7 +528,8 @@ class TimeHistogramTestCase(unittest.TestCase):
         self.assertTrue(np.array_equal(targ, x.to_array()))
 
         a = [[1, 0, 0, 0], [0, 0, 0, 1]]
-        sts = cv.binary_matrix_to_spiketrains(a, t_start=0 * pq.s, t_stop=4 * pq.s)
+        sts = cv.binary_matrix_to_spiketrains(a, t_start=0 * pq.s,
+                                              t_stop=4 * pq.s)
         x = cv.BinnedSpikeTrain(sts, binsize=1 * pq.s)
         targ = [[3, 1, 0, 0]] * 2
         self.assertTrue(np.array_equal(targ, x.to_array()))

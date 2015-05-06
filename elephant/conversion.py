@@ -825,17 +825,23 @@ def binary_matrix_to_spiketrains(binary_matrix, t_start, t_stop):
 
 
     """
-    # Make array
+    # Create array for start and stop points
     if isinstance(t_start, pq.Quantity) or isinstance(t_stop, pq.Quantity):
-        t_start = np.array([t_start for _ in range(len(binary_matrix))]) * t_start.units
-        t_stop = np.array([t_stop for _ in range(len(binary_matrix))]) * t_stop.units
+        t_start = np.array(
+            [t_start for _ in range(len(binary_matrix))]) * t_start.units
+        t_stop = np.array(
+            [t_stop for _ in range(len(binary_matrix))]) * t_stop.units
     if not _check_binary_matrix(binary_matrix):
         raise AssertionError('Given matrix is not binary')
+    # Check if start and stop are of same unit
     assert all((elem.units == t_stop[i].units) for i, elem in enumerate(
-        t_start)), 'Units of t_start and t_stop are not of same time.'
-    return [neo.SpikeTrain(row * t_start[idx].units, t_start=t_start[idx], t_stop=t_stop[idx]) if np.sum(
-        row) > 0 else neo.SpikeTrain([] * t_start[idx].units, t_start=t_start[idx], t_stop=t_stop[idx]) for idx, row in
-        enumerate(binary_matrix)]
+        t_start)), 'Units of t_start and t_stop are not of same time unit.'
+    return [neo.SpikeTrain(row * t_start[idx].units, t_start=t_start[idx],
+                           t_stop=t_stop[idx]) if np.sum(row) > 0
+            # Empty spiketrain if input contains only zeros
+            else neo.SpikeTrain([] * t_start[idx].units, t_start=t_start[idx],
+                                t_stop=t_stop[idx]) for idx, row in
+            enumerate(binary_matrix)]
 
 
 def _check_binary_matrix(binary_matrix):
@@ -843,6 +849,7 @@ def _check_binary_matrix(binary_matrix):
     # Convert to numpy array if binary_matrix is list
     if not isinstance(binary_matrix, np.ndarray):
         binary_matrix = np.array(binary_matrix)
+    # Check for binary rows
     for row in binary_matrix:
         if not len(np.where(row == 1)[0]) == np.count_nonzero(row):
             return False
