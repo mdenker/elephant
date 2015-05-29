@@ -7,6 +7,7 @@ Various functions to test the ue_utils package
 import unittest
 import numpy as np
 import quantities as pq
+import types
 import elephant.unitary_event_analysis as ue
 
 
@@ -133,6 +134,74 @@ class UETestCase(unittest.TestCase):
                       [1,0,1],[0,1,1],[1,1,1]])
         self.assertRaises(ValueError,ue.n_exp_mat_sum_trial,mat,N=2,pattern_hash = [3,6])
 
+    def test_gen_pval_anal_default(self):
+        mat = np.array([[[1, 1, 1, 1, 0],
+                         [0, 1, 1, 1, 0],
+                         [0, 1, 1, 0, 1]],
+
+                        [[1, 1, 1, 1, 1],
+                         [0, 1, 1, 1, 1],
+                         [1, 1, 0, 1, 0]]])
+        pattern_hash = np.array([5,6])
+        N = 3
+        expected = np.array([ 1.56,  2.56])
+        pval_func,n_exp = ue.gen_pval_anal(mat, N,pattern_hash)
+        self.assertTrue(np.allclose(n_exp,expected))
+        self.assertTrue(isinstance(pval_func, types.FunctionType))
+        
+    def test_jointJ_default(self):
+        p_val = np.array([0.31271072,  0.01175031]) 
+        expected = np.array([0.3419968 ,  1.92481736])
+        self.assertTrue(np.allclose(ue.jointJ(p_val),expected))
+
+    def test__rate_mat_avg_trial_default(self):
+        mat = np.array([[[1, 1, 1, 1, 0],
+                         [0, 1, 1, 1, 0],
+                         [0, 1, 1, 0, 1]],
+
+                        [[1, 1, 1, 1, 1],
+                         [0, 1, 1, 1, 1],
+                         [1, 1, 0, 1, 0]]])
+        expected = [0.9, 0.7,0.6]
+        self.assertTrue(np.allclose(expected,ue._rate_mat_avg_trial(mat)))
+
+    def test__bintime(self):
+        t = 13*pq.ms
+        binsize = 3*pq.ms
+        expected = 4
+        self.assertTrue(np.allclose(expected,ue._bintime(t,binsize)))
+    def test__winpos(self):
+        t_start = 10*pq.ms
+        t_stop = 46*pq.ms
+        winsize = 15*pq.ms
+        winstep = 3*pq.ms
+        expected = [ 10., 13., 16., 19., 22., 25., 28., 31.]*pq.ms
+        self.assertTrue(np.allclose(ue._winpos(t_start, t_stop, winsize, winstep,position='left-edge'),expected))
+
+    def test_UE_anal(self):
+        mat = np.array([[[1, 1, 1, 1, 0],
+                         [0, 1, 1, 1, 0],
+                         [0, 1, 1, 0, 1]],
+
+                        [[1, 1, 1, 1, 1],
+                         [0, 1, 1, 1, 1],
+                         [1, 1, 0, 1, 0]]])
+        pattern_hash = np.array([4,6])
+        N = 3
+        expected_S = np.array([-0.26226523,  0.04959301])
+        expected_idx = [[[0], [3]], [[], [2, 4]]]
+        expected_nemp = np.array([ 1.,  3.])
+        expected_nexp = np.array([ 1.04,  2.56])
+        expected_rate = np.array([ 0.9,  0.7,  0.6])
+        S, rate_avg, n_exp, n_emp,indices = ue.UE_anal(mat,N,pattern_hash)
+        print S
+        self.assertTrue(np.allclose(S ,expected_S))
+        self.assertTrue(np.allclose(n_exp ,expected_nexp))
+        self.assertTrue(np.allclose(n_emp ,expected_nemp))
+        self.assertTrue(np.allclose(expected_rate ,rate_avg))
+        for item0_cnt,item0 in enumerate(indices):
+            for item1_cnt,item1 in enumerate(item0):
+                self.assertTrue(np.allclose(expected_idx[item0_cnt][item1_cnt],item1))
 
 def suite():
     suite = unittest.makeSuite(UETestCase, 'test')

@@ -407,3 +407,235 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'anal'):
             "The method only works on the zero_one matrix at the moment")
 
     return n_exp        
+
+
+def gen_pval_anal(mat, N,pattern_hash):
+    ### XXX: optional return value of n_exp
+    """
+    returns the expected coincidences and a function to calculate p-value for given empirical coincidences
+    
+    this function generate a poisson distribution with the expected value calculated by mat. 
+    it returns a function which gets the empirical coincidences, n_emp,  and calculates the p-value as the area 
+    under the poisson distribution from n_emp to infinity
+
+    Parameters:
+    -----------
+    mat [zero-one matrix]:
+            0-axis --> trials
+            1-axis --> neurons
+            2-axis --> time bins
+    N [int.]:
+           number of neurons
+    pattern_hash [int. | iterable ]:
+            array of hash values, length: number of patterns
+    
+
+    Returns:
+    --------
+    pval_anal: 
+            a function which calculates the p-value for the given empirical coincidences
+    n_exp:
+            expected coincidences
+
+    Examples:
+    --------
+    >>> mat = np.array([[[1, 1, 1, 1, 0],
+                       [0, 1, 1, 1, 0],
+                       [0, 1, 1, 0, 1]],
+
+                       [[1, 1, 1, 1, 1],
+                        [0, 1, 1, 1, 1],
+                        [1, 1, 0, 1, 0]]])
+
+    >>> pattern_hash = np.array([5,6])
+    >>> N = 3
+    >>> pval_anal,n_exp = gen_pval_anal(mat, N,pattern_hash)
+    >>> n_exp
+    Out[0]: array([ 1.56,  2.56])
+    """
+
+    n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash)
+    ### XXX : which function should be used for calculating p-value?
+    def pval_anal(n_emp):
+        #p = 1.- scipy.special.gammaincc(n_emp, n_exp)
+        #p = scipy.special.gammainc(n_emp, n_exp)
+        #p = 1. - poisson_probability(n_emp,n_exp)
+        p = scipy.stats.poisson.sf(n_emp -1, n_exp)
+        return p
+    return pval_anal, n_exp
+
+
+
+def jointJ(p_val):
+    """Surprise measurement                                                                                     
+    
+    logarithmically transformation of joint-p-value into surprise measure 
+    for better visualization as the highly significant events are 
+    indicated by very low joint-p-values
+
+    Parameters:
+    -----------
+    p_val [float | iterable]: 
+        p-values of statistical tests for different pattern.
+                                                                                                 
+    Returns:
+    --------
+    j [float| iterable]:
+        list of surprise measure
+            
+    Examples:
+    ---------
+    >>> p_val = np.array([0.31271072,  0.01175031])
+    >>> jointJ(p_val)
+    Out[1]: array([0.3419968 ,  1.92481736])
+    """
+
+    
+    p_arr = np.array(p_val)
+
+    try:
+        Js = np.log10(1-p_arr)-np.log10(p_arr)
+    except RuntimeWarning:
+        pass
+    return Js
+
+def _rate_mat_avg_trial(mat):
+    """
+    calculates the averge firing rate of each neurons across trials
+    """
+    num_tr, N, nbins = np.shape(mat)
+    psth = np.zeros(N)
+    for tr,mat_tr in enumerate(mat):
+        psth += np.sum(mat_tr, axis=1)
+    return psth/float(nbins)/float(num_tr)
+
+def _bintime(t, binsize):
+    """
+    change the real time to bintime
+    """
+    t_dl = t.rescale('ms').magnitude
+    binsize_dl = binsize.rescale('ms').magnitude
+    return np.floor(np.array(t_dl)/binsize_dl).astype(int)
+
+
+
+def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
+    ### XXX : add option to gives back the center or right side of the window
+    """
+    Calculates the position of the analysis window
+    
+    """
+    t_start_dl = t_start.rescale('ms').magnitude
+    t_stop_dl = t_stop.rescale('ms').magnitude
+    winsize_dl = winsize.rescale('ms').magnitude
+    winstep_dl = winstep.rescale('ms').magnitude
+
+    # left side of the window time
+    if position == 'left-edge':
+        ts_winpos = np.arange(t_start_dl, t_stop_dl - winsize_dl + winstep_dl, winstep_dl)*pq.ms
+    else:
+        raise ValueError('the current version only returns the time left-edge of the window')
+    return ts_winpos
+
+
+
+def UE_anal(mat,N, pattern_hash):
+    """
+    returns the default results of unitary events analysis 
+    (Surprise, empirical coincidences and index of where it happened in the given mat, n_exp and average rate of neurons)
+    """
+    rate_avg = _rate_mat_avg_trial(mat)
+    n_emp, indices = n_emp_mat_sum_trial(mat, N,pattern_hash)
+    dist_exp, n_exp = gen_pval_anal(mat, N,pattern_hash)
+    pval = dist_exp(n_emp)
+    Js = jointJ(pval)
+    return Js, rate_avg, n_exp, n_emp,indices
+
+def jointJ_window_analysis(
+    data, binsize, winsize, winstep, pattern_hash,
+        t_start=None, t_stop=None,clip = True, **args):
+    """
+    Calculates the joint surprise in a sliding window fashion
+
+    parameters:
+    ----------
+    ## XXX should be justify to be compatible with neo data sturucture
+    data:  [list of neo spike trains]
+           list of spike trains in different trials
+                                        0-axis --> Trials
+                                        1-axis --> Neurons
+                                        2-axis --> Spike times
+    binsize: [float | qunatities]
+           size of bins for descritizing spike trains
+    winsize: [float | quntities]
+           size of the window of analysis
+    winstep: [float | qunatities]
+           size of the window step
+    pattern_hash: [int. | iterable]
+           list of interested patterns in hash values (see hash and inv_hash functions)
+    
+    
+    return:
+    -------
+    a dictionary containig:
+          JointSurprise: [float | iterable]"
+          JointSurprise of different given patterns within each window
+                 shape: different pattern hash --> 0-axis
+                        different window --> 1-axis
+
+          
+    """
+    if isinstance(data[0][0],neo.SpikeTrain)== False:
+        raise ValueError("structure of the data is not correct: 0-axis should be trials, 1-axis units and 2-axis neo spike trains")
+
+    
+    if t_start == None: t_start = data[0][0].t_start.rescale('ms')
+    if t_stop == None: t_stop = data[0][0].t_stop.rescale('ms')
+
+    # position of all windows (left edges)
+    t_winpos = _winpos(t_start, t_stop, winsize, winstep,position = 'left-edge')
+    t_winpos_bintime = _bintime(t_winpos, binsize)
+
+    winsize_bintime = _bintime(winsize, binsize)
+    winstep_bintime = _bintime(winstep, binsize)
+
+    # XXXX complete the warning
+    if winsize_bintime * binsize != winsize:
+        warnings.warn(
+            "ratio between winsize and binsize is not integer -- "
+            "the actual number for window size is "+str (winsize_bintime * binsize))
+
+    if winstep_bintime * binsize != winstep:
+        warnings.warn(
+            "ratio between winsize and binsize is not integer -- "
+            "the actual number for window size is" + str(winstep_bintime * binsize))
+    
+    # X: make it consistent if the data has three domension not a list of list
+    num_tr, N = np.shape(data)[:2]
+
+
+    n_bins = int((t_stop - t_start)/binsize)
+
+    mat_tr_unit_spt = np.zeros((len(data), N, n_bins))
+    for tr, sts in enumerate(data):
+        bs = conv.BinnedSpikeTrain(sts, t_start=t_start, t_stop=t_stop, binsize=binsize)
+        if binary is True:
+            mat = bs.to_bool_array()
+        else:
+            raise ValueError(
+                "The method only works on the zero_one matrix at the moment")
+        mat_tr_unit_spt[tr] = mat
+
+
+    num_win = len(t_winpos)
+    Js_win, n_exp_win, n_emp_win = (np.zeros(num_win) for _ in xrange(3))
+    rate_avg = np.zeros((num_win,N))
+    for i in range(num_tr):
+        indices_win = {'trial'+str(i): []}
+    for i, win_pos in enumerate(t_winpos_bintime):
+        mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
+        Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = UE_anal(mat_win, N,pattern_hash)
+        for j in range(num_tr):
+            if len(indices_lst[j][0]) > 0:
+                indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
+    return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg}
