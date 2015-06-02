@@ -457,10 +457,10 @@ def gen_pval_anal(mat, N,pattern_hash):
     n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash)
     ### XXX : which function should be used for calculating p-value?
     def pval_anal(n_emp):
-        #p = 1.- scipy.special.gammaincc(n_emp, n_exp)
+        p = 1.- scipy.special.gammaincc(n_emp, n_exp)
         #p = scipy.special.gammainc(n_emp, n_exp)
         #p = 1. - poisson_probability(n_emp,n_exp)
-        p = scipy.stats.poisson.sf(n_emp -1, n_exp)
+        #p = scipy.stats.poisson.sf(n_emp -1, n_exp)
         return p
     return pval_anal, n_exp
 
@@ -553,7 +553,7 @@ def UE_anal(mat,N, pattern_hash):
 
 def jointJ_window_analysis(
     data, binsize, winsize, winstep, pattern_hash,
-        t_start=None, t_stop=None,clip = True, **args):
+        t_start=None, t_stop=None,binary = True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -585,7 +585,7 @@ def jointJ_window_analysis(
 
           
     """
-    if isinstance(data[0][0],neo.SpikeTrain)== False:
+    if isinstance(data[0][0],neo.SpikeTrain) == False:
         raise ValueError("structure of the data is not correct: 0-axis should be trials, 1-axis units and 2-axis neo spike trains")
 
     
@@ -630,12 +630,14 @@ def jointJ_window_analysis(
     num_win = len(t_winpos)
     Js_win, n_exp_win, n_emp_win = (np.zeros(num_win) for _ in xrange(3))
     rate_avg = np.zeros((num_win,N))
+    indices_win = {}
     for i in range(num_tr):
-        indices_win = {'trial'+str(i): []}
+        indices_win['trial'+str(i)]= []
+
     for i, win_pos in enumerate(t_winpos_bintime):
         mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
         Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = UE_anal(mat_win, N,pattern_hash)
         for j in range(num_tr):
             if len(indices_lst[j][0]) > 0:
                 indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
-    return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg}
+    return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
