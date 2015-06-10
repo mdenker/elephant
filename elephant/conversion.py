@@ -846,7 +846,7 @@ def binary_matrix_to_spiketrains(binary_matrix, t_start, t_stop):
 
 def _check_binary_matrix(binary_matrix):
     """ Checks if given matrix is binary """
-    # Convert to numpy array if binary_matrix is list
+    # Convert to numpy array if binary_matrix is a list
     if not isinstance(binary_matrix, np.ndarray):
         binary_matrix = np.array(binary_matrix)
     # Check for binary rows
