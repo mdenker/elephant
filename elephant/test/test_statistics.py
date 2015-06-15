@@ -455,9 +455,10 @@ class RateEstimationTestCase(unittest.TestCase):
                                   rate_estimate2, rate_estimate3,
                                   rate_estimate4, rate_estimate_a0]
 
-            for i, rate_estimate in enumerate(rate_estimate_list):
+            for rate_estimate in rate_estimate_list:
                 num_spikes = len(self.spike_train)
-                auc = spint.cumtrapz(y=rate_estimate[0].magnitude[:, 0], x=rate_estimate[0].times.rescale('s').magnitude)[-1]
+                auc = spint.cumtrapz(y=rate_estimate[0].magnitude[:, 0],
+                                     x=rate_estimate[0].times.rescale('s').magnitude)[-1]
 
                 self.assertAlmostEqual(num_spikes, auc, delta=0.05*num_spikes)
 
