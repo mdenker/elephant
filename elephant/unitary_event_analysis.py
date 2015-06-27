@@ -266,7 +266,7 @@ def _sts_overlap(sts, t_start = None, t_stop = None):
     return sts_cut
 
 
-def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
+def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     """
     Calculates the expected joint probability for each spike pattern
     
@@ -277,9 +277,9 @@ def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
             1-axis --> time bins
     pattern_hash [int. | iterable ]:
             array of hash values, length: number of patterns
-    method [string | default 'anal']:
+    method [string | default 'analytic']:
             method with which the expectency should be caculated
-            'anal' -- > analytically
+            'analytic' -- > analytically 
             'surr' -- > with surrogates
     kwargs:
     -------
@@ -293,7 +293,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
 
     Returns:
     --------
-    if method is anal:
+    if method is analytic:
         numpy.array:
            An array containing the expected joint probability of each pattern,
            shape: (number of patterns,)
@@ -308,7 +308,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
                      [0, 0, 1, 0]])
     >>> pattern_hash = np.array([5,6])
     >>> N = 3
-    >>> n_exp_anal = n_exp_mat(mat,N, pattern_hash, method = 'anal')
+    >>> n_exp_anal = n_exp_mat(mat,N, pattern_hash, method = 'analytic')
     >>> n_exp_anal
     Out[0]: [ 0.5 1.5 ]
     
@@ -329,7 +329,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
     if np.any(mat>1) or np.any(mat<0):
         raise "ValueError: entries of mat should be either one or zero"
     
-    if method == 'anal':
+    if method == 'analytic':
         marg_prob = np.mean(mat,1,dtype=float)
         #marg_prob needs to be a column vector, so we 
         #build a two dimensional array with 1 column 
@@ -355,7 +355,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'anal', **kwargs):
 
 
 
-def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'anal'):
+def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
     """
     Calculates the expected joint probability for each spike pattern sum over trials
     
@@ -390,7 +390,7 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'anal'):
 
     >>> pattern_hash = np.array([5,6])
     >>> N = 3
-    >>> n_exp_anal = n_exp_mat_sum_trial(mat, N, pattern_hash, method = 'anal')
+    >>> n_exp_anal = n_exp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic')
     >>> print n_exp_anal
     Out[0]: array([ 1.56,  2.56])
     """
@@ -398,10 +398,12 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'anal'):
     if N != np.shape(mat)[1]:
         raise ValueError('the entries of mat should be a list of a list where 0-axis is trials and 1-axis is neurons')
 
-    if method == 'anal':
+    if method == 'analytic_TrialByTrial':
         n_exp = np.zeros(len(pattern_hash))
         for mat_tr in mat:
-            n_exp += n_exp_mat(mat_tr, N,pattern_hash, method = 'anal')
+            n_exp += n_exp_mat(mat_tr, N,pattern_hash,method = 'analytic')
+    elif method == 'analytic_TrialAverage':
+        n_exp = n_exp_mat(np.mean(mat,0), N,pattern_hash,method = 'analytic')*np.shape(mat)[0]
     else:
         raise ValueError(
             "The method only works on the zero_one matrix at the moment")
@@ -409,7 +411,7 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'anal'):
     return n_exp        
 
 
-def gen_pval_anal(mat, N,pattern_hash):
+def gen_pval_anal(mat, N,pattern_hash,method = 'analytic_TrialByTrial'):
     ### XXX: optional return value of n_exp
     """
     returns the expected coincidences and a function to calculate p-value for given empirical coincidences
@@ -454,7 +456,7 @@ def gen_pval_anal(mat, N,pattern_hash):
     Out[0]: array([ 1.56,  2.56])
     """
 
-    n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash)
+    n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash,method = method)
     ### XXX : which function should be used for calculating p-value?
     def pval_anal(n_emp):
         p = 1.- scipy.special.gammaincc(n_emp, n_exp)
@@ -501,7 +503,7 @@ def jointJ(p_val):
 
 def _rate_mat_avg_trial(mat):
     """
-    calculates the averge firing rate of each neurons across trials
+    calculates the average firing rate of each neurons across trials
     """
     num_tr, N, nbins = np.shape(mat)
     psth = np.zeros(N)
@@ -539,21 +541,22 @@ def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
 
 
 
-def UE_anal(mat,N, pattern_hash):
+def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
     """
     returns the default results of unitary events analysis 
     (Surprise, empirical coincidences and index of where it happened in the given mat, n_exp and average rate of neurons)
     """
     rate_avg = _rate_mat_avg_trial(mat)
     n_emp, indices = n_emp_mat_sum_trial(mat, N,pattern_hash)
-    dist_exp, n_exp = gen_pval_anal(mat, N,pattern_hash)
+    dist_exp, n_exp = gen_pval_anal(mat, N,pattern_hash,method)
     pval = dist_exp(n_emp)
     Js = jointJ(pval)
     return Js, rate_avg, n_exp, n_emp,indices
 
 def jointJ_window_analysis(
     data, binsize, winsize, winstep, pattern_hash,
-        t_start=None, t_stop=None,binary = True, **args):
+         method = 'analytic_TrialByTrial',t_start=None, 
+        t_stop=None,binary = True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -636,7 +639,7 @@ def jointJ_window_analysis(
 
     for i, win_pos in enumerate(t_winpos_bintime):
         mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
-        Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = UE_anal(mat_win, N,pattern_hash)
+        Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
         for j in range(num_tr):
             if len(indices_lst[j][0]) > 0:
                 indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)

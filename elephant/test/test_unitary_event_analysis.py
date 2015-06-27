@@ -129,6 +129,20 @@ class UETestCase(unittest.TestCase):
         n_exp = ue.n_exp_mat_sum_trial(mat, N,pattern_hash)
         self.assertTrue(np.allclose(n_exp,expected))
 
+    def test_n_exp_mat_sum_trial_TrialAverage(self):
+        mat = np.array([[[1, 1, 1, 1, 0],
+                         [0, 1, 1, 1, 0],
+                         [0, 1, 1, 0, 1]],
+
+                        [[1, 1, 1, 1, 1],
+                         [0, 1, 1, 1, 1],
+                         [1, 1, 0, 1, 0]]])
+        pattern_hash = np.array([5,6])
+        N = 3
+        expected = np.array([ 1.62,  2.52])
+        n_exp = ue.n_exp_mat_sum_trial(mat, N,pattern_hash,method = 'analytic_TrialAverage')
+        self.assertTrue(np.allclose(n_exp,expected))
+
     def test_n_exp_mat_sum_trial_ValueError(self):
         mat = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
                       [1,0,1],[0,1,1],[1,1,1]])
@@ -178,7 +192,7 @@ class UETestCase(unittest.TestCase):
         expected = [ 10., 13., 16., 19., 22., 25., 28., 31.]*pq.ms
         self.assertTrue(np.allclose(ue._winpos(t_start, t_stop, winsize, winstep,position='left-edge'),expected))
 
-    def test_UE_anal(self):
+    def test__UE(self):
         mat = np.array([[[1, 1, 1, 1, 0],
                          [0, 1, 1, 1, 0],
                          [0, 1, 1, 0, 1]],
@@ -193,7 +207,7 @@ class UETestCase(unittest.TestCase):
         expected_nemp = np.array([ 1.,  3.])
         expected_nexp = np.array([ 1.04,  2.56])
         expected_rate = np.array([ 0.9,  0.7,  0.6])
-        S, rate_avg, n_exp, n_emp,indices = ue.UE_anal(mat,N,pattern_hash)
+        S, rate_avg, n_exp, n_emp,indices = ue._UE(mat,N,pattern_hash)
         print S
         self.assertTrue(np.allclose(S ,expected_S))
         self.assertTrue(np.allclose(n_exp ,expected_nexp))
