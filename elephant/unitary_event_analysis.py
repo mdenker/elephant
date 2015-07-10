@@ -8,33 +8,35 @@ import quantities as pq
 import neo
 import warnings
 import elephant.conversion as conv
+import multiprocessing as mp
+from functools import partial
 
 
 def hash(m, N, base=2):
     """
     Calculate for a spike pattern or a matrix of spike patterns (provide each pattern as a column)
     composed of N neurons a unique number.
-    
-    
+
+
     Parameters:
     -----------
     m [int. | iterable]:
            matrix of 0-1 patterns as columns, shape: (number of neurons, number of patterns)
     N [int. ]:
            number of neurons is required to be equal to the number of rows
-    base [int. default to 2]: 
+    base [int. default to 2]:
            base for calculation of the number from binary sequences (= pattern)
-    
+
     Returns:
     --------
     list of integers:
            An array containing the hash values of each pattern,
            shape: (number of patterns)
-    
+
     Raises:
     -------
        ValueError: if matrix m has wrong orientation
-    
+
     Examples:
     ---------
     descriptive example:
@@ -50,7 +52,7 @@ def hash(m, N, base=2):
     >>> m = np.array([[0, 1, 0, 0, 1, 1, 0, 1],
                          [0, 0, 1, 0, 1, 0, 1, 1],
                          [0, 0, 0, 1, 0, 1, 1, 1]])
-    
+
     >>> hash(m,N=3)
     Out[1]: array([0, 4, 2, 1, 6, 5, 3, 7])
     """
@@ -70,24 +72,24 @@ def hash(m, N, base=2):
 def inv_hash(h,N,base=2):
     """
     Calculate the 0-1 spike patterns (matrix) from hash values
-    
+
     Parameters:
     -----------
     h [int. | iterable]:
            list or array of hash values, length: number of patterns
     N [int.]:
            number of neurons
-    base [int. default to 2]: 
+    base [int. default to 2]:
            base for calculation of the number from binary sequences (= pattern)
-           
+
     Raises:
     -------
        ValueError: if the hash is not compatible with the number of neurons
-       hash value should not be larger than the biggest possible hash number with 
+       hash value should not be larger than the biggest possible hash number with
        given number of neurons
        (e.g. for N = 2, max(hash) = 2^1 + 2^0 = 3
             , or for N = 4, max(hash) = 2^3 + 2^2 + 2^1 + 2^0 = 15)
-    
+
     Returns:
     --------
        numpy.array:
@@ -99,13 +101,13 @@ def inv_hash(h,N,base=2):
     >>> h = np.array([3,7])
     >>> N = 4
     >>> inv_hash(h,N)
-    Out[1]: 
+    Out[1]:
     array([[1, 1],
            [1, 1],
            [0, 1],
            [0, 0]])
     """
-    
+
     # check if the hash values are not bigger than possible hash value
     # for N neuron with basis = base
     if np.any(h > np.sum([base**x for x in range(N)])):
@@ -114,19 +116,19 @@ def inv_hash(h,N,base=2):
     if np.all(np.int64(h) == h) == False:
         raise ValueError("hash values are not integers")
 
-    m = np.zeros((N,len(h)), dtype=int) 
+    m = np.zeros((N,len(h)), dtype=int)
     for  j, hh in enumerate(h):
         i = N-1
         while i>=0 and hh != 0:
             m[i,j] = hh % base
             hh = hh / base
             i-=1
-    return m        
+    return m
 
 def n_emp_mat(mat,N, pattern_hash,base=2):
     """
     Calculates empirical number of observed patterns expressed by their hash values
-    
+
     Parameters:
     -----------
     m [int. | iterable]:
@@ -135,19 +137,19 @@ def n_emp_mat(mat,N, pattern_hash,base=2):
            number of neurons
     pattern_hash [int. | iterable ]:
             array of hash values. Length defines number of patterns
-    
-    base 
+
+    base
     Returns:
     --------
     N_emp [int. | iterable]:
-           empirical number of each observed pattern. Same length as pattern_hash 
+           empirical number of each observed pattern. Same length as pattern_hash
     indices [list of list | iterable]:
-           list of indices of mat per entry of pattern_hash. indices[i] = N_emp[i] = pattern_hash[i] 
+           list of indices of mat per entry of pattern_hash. indices[i] = N_emp[i] = pattern_hash[i]
 
     Raises:
     -------
        ValueError: if mat is not zero-one matrix
-       
+
     Examples:
     ---------
     >>> mat = np.array([[1, 0, 0, 1, 1],
@@ -176,7 +178,7 @@ def n_emp_mat(mat,N, pattern_hash,base=2):
 def n_emp_mat_sum_trial(mat, N,pattern_hash):
     """
     Calculates empirical number of observed patterns expressed summed across trials
-    
+
     Parameters:
     -----------
     mat [zero or one matrix]:
@@ -187,7 +189,7 @@ def n_emp_mat_sum_trial(mat, N,pattern_hash):
            number of neurons
     pattern_hash [int. | iterable ]:
             array of hash values, length: number of patterns
-    
+
 
     Returns:
     --------
@@ -197,12 +199,12 @@ def n_emp_mat_sum_trial(mat, N,pattern_hash):
            list of indices of mat for each trial in which the specific pattern has been observed.
            0-axis --> trial
            1-axis --> list of indices for the chosen trial per entry of pattern_hash
-    
+
     Raises:
     -------
        ValueError: if matrix mat has wrong orientation
        ValueError: if mat is not zero-one matrix
-       
+
     Examples:
     ---------
     >>> mat = np.array([[[1, 1, 1, 1, 0],
@@ -269,7 +271,7 @@ def _sts_overlap(sts, t_start = None, t_stop = None):
 def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     """
     Calculates the expected joint probability for each spike pattern
-    
+
     Parameters:
     -----------
     mat [zero or one matrix]:
@@ -279,14 +281,14 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
             array of hash values, length: number of patterns
     method [string | default 'analytic']:
             method with which the expectency should be caculated
-            'analytic' -- > analytically 
+            'analytic' -- > analytically
             'surr' -- > with surrogates
     kwargs:
     -------
     n_surr [int. default to 3000]:
             number of surrogate to be used
 
-    
+
     Raises:
     -------
        ValueError: if matrix m has wrong orientation
@@ -311,39 +313,39 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     >>> n_exp_anal = n_exp_mat(mat,N, pattern_hash, method = 'analytic')
     >>> n_exp_anal
     Out[0]: [ 0.5 1.5 ]
-    
-    >>> 
+
+    >>>
     >>>
     >>> n_exp_surr = n_exp_mat(mat, N,pattern_hash, method = 'surr', n_surr = 5000)
     >>> print n_exp_surr
     [[ 1.  1.]
      [ 2.  0.]
      [ 2.  0.]
-     ..., 
+     ...,
      [ 2.  0.]
      [ 2.  0.]
      [ 1.  1.]]
-     
+
     """
     # check if the mat is zero-one matrix
     if np.any(mat>1) or np.any(mat<0):
         raise "ValueError: entries of mat should be either one or zero"
-    
+
     if method == 'analytic':
         marg_prob = np.mean(mat,1,dtype=float)
-        #marg_prob needs to be a column vector, so we 
-        #build a two dimensional array with 1 column 
+        #marg_prob needs to be a column vector, so we
+        #build a two dimensional array with 1 column
         #and len(marg_prob) rows
         marg_prob = np.reshape(marg_prob,(len(marg_prob),1))
         m = inv_hash(pattern_hash, N)
-        nrep = np.shape(m)[1] 
-        # multipyling the marginal probability of neurons with regard to the pattern 
+        nrep = np.shape(m)[1]
+        # multipyling the marginal probability of neurons with regard to the pattern
         pmat = np.multiply(m,np.tile(marg_prob,(1,nrep)))+ np.multiply(1-m,np.tile(1-marg_prob,(1,nrep)))
         return np.prod(pmat,axis=0)*float(np.shape(mat)[1])
     if method == 'surr':
-        if 'n_surr' in kwargs: 
-            n_surr = kwargs['n_surr'] 
-        else: 
+        if 'n_surr' in kwargs:
+            n_surr = kwargs['n_surr']
+        else:
             n_surr = 3000.
         N_exp_array = np.zeros((n_surr,len(pattern_hash)))
         for rz_idx, rz in enumerate(np.arange(n_surr)):
@@ -358,7 +360,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
 def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
     """
     Calculates the expected joint probability for each spike pattern sum over trials
-    
+
     Parameters:
     -----------
     mat [zero or one matrix]:
@@ -369,7 +371,7 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
            number of neurons
     pattern_hash [int. | iterable ]:
             array of hash values, length: number of patterns
-    
+
 
     Returns:
     --------
@@ -408,16 +410,16 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
         raise ValueError(
             "The method only works on the zero_one matrix at the moment")
 
-    return n_exp        
+    return n_exp
 
 
 def gen_pval_anal(mat, N,pattern_hash,method = 'analytic_TrialByTrial'):
     ### XXX: optional return value of n_exp
     """
     returns the expected coincidences and a function to calculate p-value for given empirical coincidences
-    
-    this function generate a poisson distribution with the expected value calculated by mat. 
-    it returns a function which gets the empirical coincidences, n_emp,  and calculates the p-value as the area 
+
+    this function generate a poisson distribution with the expected value calculated by mat.
+    it returns a function which gets the empirical coincidences, n_emp,  and calculates the p-value as the area
     under the poisson distribution from n_emp to infinity
 
     Parameters:
@@ -430,11 +432,11 @@ def gen_pval_anal(mat, N,pattern_hash,method = 'analytic_TrialByTrial'):
            number of neurons
     pattern_hash [int. | iterable ]:
             array of hash values, length: number of patterns
-    
+
 
     Returns:
     --------
-    pval_anal: 
+    pval_anal:
             a function which calculates the p-value for the given empirical coincidences
     n_exp:
             expected coincidences
@@ -469,22 +471,22 @@ def gen_pval_anal(mat, N,pattern_hash,method = 'analytic_TrialByTrial'):
 
 
 def jointJ(p_val):
-    """Surprise measurement                                                                                     
-    
-    logarithmically transformation of joint-p-value into surprise measure 
-    for better visualization as the highly significant events are 
+    """Surprise measurement
+
+    logarithmically transformation of joint-p-value into surprise measure
+    for better visualization as the highly significant events are
     indicated by very low joint-p-values
 
     Parameters:
     -----------
-    p_val [float | iterable]: 
+    p_val [float | iterable]:
         p-values of statistical tests for different pattern.
-                                                                                                 
+
     Returns:
     --------
     j [float| iterable]:
         list of surprise measure
-            
+
     Examples:
     ---------
     >>> p_val = np.array([0.31271072,  0.01175031])
@@ -492,7 +494,7 @@ def jointJ(p_val):
     Out[1]: array([0.3419968 ,  1.92481736])
     """
 
-    
+
     p_arr = np.array(p_val)
 
     try:
@@ -525,7 +527,7 @@ def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
     ### XXX : add option to gives back the center or right side of the window
     """
     Calculates the position of the analysis window
-    
+
     """
     t_start_dl = t_start.rescale('ms').magnitude
     t_stop_dl = t_stop.rescale('ms').magnitude
@@ -543,7 +545,7 @@ def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
 
 def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
     """
-    returns the default results of unitary events analysis 
+    returns the default results of unitary events analysis
     (Surprise, empirical coincidences and index of where it happened in the given mat, n_exp and average rate of neurons)
     """
     rate_avg = _rate_mat_avg_trial(mat)
@@ -555,7 +557,7 @@ def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
 
 def jointJ_window_analysis(
     data, binsize, winsize, winstep, pattern_hash,
-         method = 'analytic_TrialByTrial',t_start=None, 
+         method = 'analytic_TrialByTrial',t_start=None,
         t_stop=None,binary = True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
@@ -576,8 +578,12 @@ def jointJ_window_analysis(
            size of the window step
     pattern_hash: [int. | iterable]
            list of interested patterns in hash values (see hash and inv_hash functions)
-    
-    
+    parallel: bool
+        If **True** use multiprocessing to calculate the sliding window in a
+        parallel fashion.
+        Default is **False**.
+
+
     return:
     -------
     a dictionary containig:
@@ -586,12 +592,12 @@ def jointJ_window_analysis(
                  shape: different pattern hash --> 0-axis
                         different window --> 1-axis
 
-          
+
     """
     if isinstance(data[0][0],neo.SpikeTrain) == False:
         raise ValueError("structure of the data is not correct: 0-axis should be trials, 1-axis units and 2-axis neo spike trains")
 
-    
+
     if t_start == None: t_start = data[0][0].t_start.rescale('ms')
     if t_stop == None: t_stop = data[0][0].t_stop.rescale('ms')
 
@@ -612,8 +618,8 @@ def jointJ_window_analysis(
         warnings.warn(
             "ratio between winsize and binsize is not integer -- "
             "the actual number for window size is" + str(winstep_bintime * binsize))
-    
-    # X: make it consistent if the data has three domension not a list of list
+
+    # X: make it consistent if the data has three dimension not a list of list
     num_tr, N = np.shape(data)[:2]
 
 
@@ -631,16 +637,39 @@ def jointJ_window_analysis(
 
 
     num_win = len(t_winpos)
-    Js_win, n_exp_win, n_emp_win = (np.zeros(num_win) for _ in xrange(3))
+    Js_win, n_exp_win, n_emp_win = (np.zeros(num_win) for _ in range(3))
     rate_avg = np.zeros((num_win,N))
     indices_win = {}
     for i in range(num_tr):
-        indices_win['trial'+str(i)]= []
+        indices_win['trial'+str(i)] = []
 
-    for i, win_pos in enumerate(t_winpos_bintime):
-        mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
-        Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
-        for j in range(num_tr):
-            if len(indices_lst[j][0]) > 0:
-                indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
-    return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
+    if parallel:
+        pool = mp.Pool(processes=mp.cpu_count())
+        # l = [(i1, ), (i2, )...]
+        l = [pool.apply_async(_parallel_UE, args=(i, win_pos, mat_tr_unit_spt,
+                                                  winsize_bintime, Js_win,
+                                                  rate_avg, n_exp_win,
+                                                  n_emp_win, indices_win, N,
+                                                  pattern_hash, method,
+                                                  num_tr))
+             for i, win_pos in enumerate(t_winpos_bintime)]
+        return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,
+                'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
+    else:
+        for i, win_pos in enumerate(t_winpos_bintime):
+            mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
+            Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
+            for j in range(num_tr):
+                if len(indices_lst[j][0]) > 0:
+                    indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
+        return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
+
+def _parallel_UE(i, win_pos, mat_tr_unit_spt, winsize_bintime, Js_win, rate_avg, n_exp_win, n_emp_win, indices_win,
+                 N, pattern_hash, method, num_tr):
+    mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
+    Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(
+        mat_win, N, pattern_hash, method)
+    for j in range(num_tr):
+        if len(indices_lst[j][0]) > 0:
+            indices_win['trial' + str(j)] = np.append(
+                indices_win['trial' + str(j)], indices_lst[j][0] + win_pos)
