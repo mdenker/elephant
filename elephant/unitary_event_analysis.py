@@ -1,15 +1,9 @@
 import scipy.special
-import scipy as sp
 import scipy.sparse
 import numpy as np
-import time
-import itertools
-import quantities as pq
-import neo
 import warnings
-import elephant.conversion as conv
 import multiprocessing as mp
-from functools import partial
+from test_ue_import import *
 
 
 def hash(m, N, base=2):
@@ -23,7 +17,7 @@ def hash(m, N, base=2):
     m [int. | iterable]:
            matrix of 0-1 patterns as columns, shape: (number of neurons, number of patterns)
     N [int. ]:
-           number of neurons is required to be equal to the number of rows
+           number of neurons is required to be equal to tuhe number of rows
     base [int. default to 2]:
            base for calculation of the number from binary sequences (= pattern)
 
@@ -555,6 +549,7 @@ def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
     Js = jointJ(pval)
     return Js, rate_avg, n_exp, n_emp,indices
 
+
 def jointJ_window_analysis(
     data, binsize, winsize, winstep, pattern_hash,
          method = 'analytic_TrialByTrial',t_start=None,
@@ -643,33 +638,43 @@ def jointJ_window_analysis(
     for i in range(num_tr):
         indices_win['trial'+str(i)] = []
 
-    if parallel:
+    if 'parallel' in args and args['parallel']:
         pool = mp.Pool(processes=mp.cpu_count())
-        # l = [(i1, ), (i2, )...]
-        l = [pool.apply_async(_parallel_UE, args=(i, win_pos, mat_tr_unit_spt,
-                                                  winsize_bintime, Js_win,
-                                                  rate_avg, n_exp_win,
-                                                  n_emp_win, indices_win, N,
-                                                  pattern_hash, method,
-                                                  num_tr))
+        l = [pool.apply(_parallel_UE, args=(i, win_pos, mat_tr_unit_spt,
+                                            winsize_bintime, N,
+                                            pattern_hash, method, num_tr))
              for i, win_pos in enumerate(t_winpos_bintime)]
-        return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,
-                'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
+        for i in l:
+            idx = i[0]
+            Js_win[idx] = i[1]
+            rate_avg[idx] = i[2]
+            n_exp_win[idx] = i[3]
+            n_emp_win[idx] = i[4]
+            for j in i[5]:
+                indices_win[j[0]].extend(np.unique(j[1]))
+        return {'Js': Js_win, 'indices': indices_win, 'n_emp': n_emp_win,
+                'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}
     else:
         for i, win_pos in enumerate(t_winpos_bintime):
-            mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
-            Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
+            mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
+            Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[
+                i], indices_lst = _UE(mat_win, N, pattern_hash, method)
             for j in range(num_tr):
                 if len(indices_lst[j][0]) > 0:
-                    indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
-        return {'Js': Js_win, 'indices':indices_win, 'n_emp': n_emp_win,'n_exp': n_exp_win,'rate_avg':rate_avg/binsize}
+                    indices_win['trial' + str(j)] = np.append(
+                        indices_win['trial' + str(j)],
+                        indices_lst[j][0] + win_pos)
+        return {'Js': Js_win, 'indices': indices_win, 'n_emp': n_emp_win,
+                'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}
 
-def _parallel_UE(i, win_pos, mat_tr_unit_spt, winsize_bintime, Js_win, rate_avg, n_exp_win, n_emp_win, indices_win,
-                 N, pattern_hash, method, num_tr):
+
+def _parallel_UE(i, win_pos, mat_tr_unit_spt, winsize_bintime,
+                 n, pattern_hash, method, num_tr):
     mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
-    Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(
-        mat_win, N, pattern_hash, method)
+    js_win_i, rate_avg_i, n_exp_win_i, n_emp_win_i, indices_lst = _UE(
+        mat_win, n, pattern_hash, method)
+    l_i = []
     for j in range(num_tr):
         if len(indices_lst[j][0]) > 0:
-            indices_win['trial' + str(j)] = np.append(
-                indices_win['trial' + str(j)], indices_lst[j][0] + win_pos)
+            l_i.append(('trial' + str(j), indices_lst[j][0] + win_pos))
+    return i, js_win_i, rate_avg_i, n_exp_win_i, n_emp_win_i, l_i
