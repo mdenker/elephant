@@ -2,6 +2,7 @@ import scipy.special
 import scipy.sparse
 import numpy as np
 import warnings
+import time
 import multiprocessing as mp
 from test_ue_import import *
 
@@ -640,10 +641,13 @@ def jointJ_window_analysis(
 
     if 'parallel' in args and args['parallel']:
         pool = mp.Pool(processes=mp.cpu_count())
-        l = [pool.apply(_parallel_UE, args=(i, win_pos, mat_tr_unit_spt,
-                                            winsize_bintime, N,
-                                            pattern_hash, method, num_tr))
+        print('Timing parallel')
+        now = time.time()
+        l = [pool.apply(_parallel_UE, args=(i, win_pos,
+                                            mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime],
+                                            N, pattern_hash, method, num_tr))
              for i, win_pos in enumerate(t_winpos_bintime)]
+        print(time.time() - now, 'Time of parallel process')
         for i in l:
             idx = i[0]
             Js_win[idx] = i[1]
@@ -652,9 +656,12 @@ def jointJ_window_analysis(
             n_emp_win[idx] = i[4]
             for j in i[5]:
                 indices_win[j[0]].extend(np.unique(j[1]))
+        print(time.time() - now, 'Time of parallel process after assembly')
         return {'Js': Js_win, 'indices': indices_win, 'n_emp': n_emp_win,
                 'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}
     else:
+        print('Timing sequential')
+        now = time.time()
         for i, win_pos in enumerate(t_winpos_bintime):
             mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
             Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[
@@ -664,13 +671,14 @@ def jointJ_window_analysis(
                     indices_win['trial' + str(j)] = np.append(
                         indices_win['trial' + str(j)],
                         indices_lst[j][0] + win_pos)
+        print(time.time() - now, 'Time of sequential process')
         return {'Js': Js_win, 'indices': indices_win, 'n_emp': n_emp_win,
                 'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}
 
 
-def _parallel_UE(i, win_pos, mat_tr_unit_spt, winsize_bintime,
+def _parallel_UE(i, win_pos, mat_win,
                  n, pattern_hash, method, num_tr):
-    mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
+    # mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
     js_win_i, rate_avg_i, n_exp_win_i, n_emp_win_i, indices_lst = _UE(
         mat_win, n, pattern_hash, method)
     l_i = []
