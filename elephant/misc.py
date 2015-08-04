@@ -3,8 +3,10 @@ import quantities as pq
 import matplotlib.pyplot as plt
 import copy
 from scipy.optimize import curve_fit
+from functools import partial
 import neo
-import elephant.unitary_event_analysis as ue
+import timeit
+import unitary_event_analysis as ue
 import elephant.spike_train_generation as stg
 
 def load(filename):
@@ -491,7 +493,7 @@ def _gen_data_analysis_spike_train_book_fig17p2(num_trials):
     return sts
 
 def generate_data(lambda_b,lambda_c,T,T_h,nTrials,RateJitter = 0*pq.Hz):
-    
+
     t_start_c,t_stop_c = (T-T_h)/2., (T-T_h)/2. + T_h
     N = 2
     sts = []
@@ -529,7 +531,7 @@ def generate_data(lambda_b,lambda_c,T,T_h,nTrials,RateJitter = 0*pq.Hz):
     return sts
 
 
-    
+
 def generate_data_oscilatory(nTrials, N, T,freq_coinc, amp_coinc, offset_coinc,freq_bg, amp_bg,offset_bg,RateJitter = 10*pq.Hz):
     """
     generate non-stationary poisson spiketrains with injected coincidences
@@ -542,13 +544,13 @@ def generate_data_oscilatory(nTrials, N, T,freq_coinc, amp_coinc, offset_coinc,f
     bbc = (2*numpy.pi*freq_coinc*tc).simplified
     coincrate = offset_coinc+ amp_coinc*numpy.sin(bbc)*offset_coinc.units
     coincrate[coincrate <0*coincrate.units]=0*coincrate.units
-    
+
     # background rate
     tb = numpy.arange(0,T.rescale('ms').magnitude,h.rescale('ms').magnitude)*pq.ms
     bbb = (2*numpy.pi*freq_bg*tb).simplified
     backgroundrate = offset_bg+ amp_bg*numpy.sin(bbb)*offset_bg.units
     backgroundrate[backgroundrate <0*backgroundrate.units]=0*backgroundrate.units
-    
+
     # inhomogenious rate across trials
     rndRateJitter = (numpy.random.rand(nTrials)-0.5)*RateJitter
     spiketrain = []
@@ -568,7 +570,80 @@ def generate_data_oscilatory(nTrials, N, T,freq_coinc, amp_coinc, offset_coinc,f
 
 
 
-    
+def run_benchmark_plot(func, spiketrain, binsize, winsize, winstep, pattern_hash):
+    """
+    Runs the benchmarks and initializes the plot benchmark function.
+
+    """
+    benchmark = list()
+    # sequential
+    benchmark.append(
+        timeit.Timer(partial(func, spiketrain, binsize, winsize, winstep,
+                             pattern_hash, parallel=True)).timeit(1))
+    # Multiprocessing
+    benchmark.append(
+        timeit.Timer(partial(func, spiketrain, binsize, winsize, winstep,
+                             pattern_hash)).timeit(1))
+    _plot_benchmark_seaborn(benchmark)
+
+
+def _plot_benchmark(benchmarks):
+    """
+    Plot the benchmarks
+
+    :param benchmarks: list of timed benchmarks to plot
+
+    """
+    bar_labels = ['multiprocessing', 'serial']
+    plt.figure(figsize=(16, 9))
+    y_pos = numpy.arange(len(benchmarks))
+    plt.yticks(y_pos, bar_labels, fontsize=16)
+    bars = plt.barh(y_pos, benchmarks, align='center', alpha=0.7, color='g')
+
+    for ba, be in zip(bars, benchmarks):
+        plt.text(ba.get_width() + .1, ba.get_y() + ba.get_height()/2,
+                 '{0:.2%}'.format(be/benchmarks[0]),
+                 ha='center', va='bottom', fontsize=11)
+    plt.xlabel(
+        'time in seconds ', fontsize=14)
+    plt.ylabel('Methods', fontsize=14)
+    plt.title('Serial vs. Multiprocessing ', fontsize=18)
+    plt.ylim([-1, len(benchmarks) + 0.5])
+    plt.xlim([0, max(benchmarks) * 1.1])
+    plt.vlines(benchmarks[1], -1, len(benchmarks) + 0.5, linestyles='dashed')
+    plt.grid()
+    plt.tight_layout()
+    # plt.savefig('benchmark.png')
+    plt.show()
+
+def _plot_benchmark_seaborn(benchmarks):
+    try:
+        import seaborn as sns
+    except ImportError:
+        import warnings
+        warnings.warn("Plotting module seaborn is not installed!")
+    else:
+        sns.set(style="darkgrid")
+        sns.set_context('poster')
+        bar_labels = ['multiprocessing', 'sequential']
+        plt.figure(figsize=(16, 9))
+        y_pos = numpy.arange(len(benchmarks))
+        plt.yticks(y_pos, bar_labels, fontsize=16)
+        bars = plt.barh(y_pos, benchmarks, align='center', alpha=0.7,
+                        color='g')
+
+        for ba, be in zip(bars, benchmarks):
+            plt.text(ba.get_width() + .1, ba.get_y() + ba.get_height() / 2,
+                     '{0:.2%}'.format(be / benchmarks[0]),
+                     ha='center', va='bottom', fontsize=11)
+        plt.xlabel(
+            'time in seconds ', fontsize=14)
+        plt.ylabel('Methods', fontsize=14)
+        plt.title('Serial vs. Multiprocessing ', fontsize=18)
+        plt.vlines(benchmarks[1], -1, len(benchmarks) + 0.5,
+                   linestyles='dashed', linewidths=0.5)
+        # plt.savefig('benchmark.png')
+        plt.show()
 
 def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args,add_epochs = []):
     """
@@ -590,7 +665,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
     import matplotlib.pylab as plt
     t_start = data[0][0].t_start
     t_stop = data[0][0].t_stop
-    
+
     t_winpos = ue._winpos(t_start,t_stop,winsize,winstep)
     Js_sig = ue.jointJ(sig_level)
     num_tr = len(data)
@@ -655,7 +730,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
         S_ylim = args['S_ylim']
     else:
         S_ylim = [-3,3]
-    
+
     if 'marker_size' in args.keys():
         ms = args['marker_size']
     else:
@@ -688,7 +763,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
                     for j in sig_idx_win:
                         xx =numpy.append(xx,x[numpy.where((x*binsize>=t_winpos[j]) &(x*binsize<t_winpos[j] + winsize))])
                     plt.plot(
-                        numpy.unique(xx)*binsize, numpy.ones_like(numpy.unique(xx))*tr + n*(num_tr + 1) + 1, 
+                        numpy.unique(xx)*binsize, numpy.ones_like(numpy.unique(xx))*tr + n*(num_tr + 1) + 1,
                         ms=ms, marker = 's', ls = '',mfc='none', mec='r')
         plt.axhline((tr + 2)*(n+1) ,lw = 2, color = 'k')
     y_ticks_pos = numpy.arange(num_tr/2 + 1,N*(num_tr+1), num_tr+1)
@@ -698,7 +773,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
         print ch_id
         plt.gca().text((max(t_winpos) + winsize).rescale('ms').magnitude,
                        y_ticks_pos[ch_cnt],'CH-'+str(ch_id),fontsize = fsize)
-        
+
     plt.ylim(0, (tr + 2)*(n+1) + 1)
     plt.xlim(0, (max(t_winpos) + winsize).rescale('ms').magnitude)
     plt.xticks([])
@@ -713,12 +788,12 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
     ax1.set_title('Raw Coincidences',fontsize = 20,color = 'c')
     for n in range(N):
         for tr,data_tr in enumerate(data):
-            plt.plot(data_tr[n].rescale('ms').magnitude, 
-                     numpy.ones_like(data_tr[n].magnitude)*tr + n*(num_tr + 1) + 1, 
+            plt.plot(data_tr[n].rescale('ms').magnitude,
+                     numpy.ones_like(data_tr[n].magnitude)*tr + n*(num_tr + 1) + 1,
                      ',',color = 'k')
             plt.plot(
-                numpy.unique(Js_dict['indices']['trial'+str(tr)])*binsize, 
-                numpy.ones_like(numpy.unique(Js_dict['indices']['trial'+str(tr)]))*tr + n*(num_tr + 1) + 1, 
+                numpy.unique(Js_dict['indices']['trial'+str(tr)])*binsize,
+                numpy.ones_like(numpy.unique(Js_dict['indices']['trial'+str(tr)]))*tr + n*(num_tr + 1) + 1,
                 ls = '',ms=ms, marker = 's', markerfacecolor='none', markeredgecolor='c')
         plt.axhline((tr + 2)*(n+1) ,lw = 2, color = 'k')
     plt.ylim(0, (tr + 2)*(n+1) + 1)
@@ -769,7 +844,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
             plt.axvline(e_val,ls = ls,color = 'r',lw = 2,alpha = alpha)
     if 'set_xticks' in args.keys() and args['set_xticks'] == False:
         plt.xticks([])
-   
+
     print 'plotting Surprise ...'
     plt.subplot(num_row,1,5,sharex=ax)
     plt.plot(t_winpos + winsize/2., Js_dict['Js'],lw = lw,color = 'k')
@@ -788,7 +863,7 @@ def _plot_UE(data,Js_dict,sig_level,binsize,winsize,winstep, pattern_hash,N,args
             plt.gca().text(e_val - 10*pq.ms,2*S_ylim[0],key,fontsize = fsize,color = 'r')
     if 'set_xticks' in args.keys() and args['set_xticks'] == False:
         plt.xticks([])
-    
+
     if add_epochs != []:
         plt.subplot(num_row,1,6,sharex=ax)
         plt.plot(coincrate,lw = lw,color = 'c')

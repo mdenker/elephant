@@ -622,6 +622,10 @@ def jointJ_window_analysis(
     n_bins = int((t_stop - t_start)/binsize)
 
     mat_tr_unit_spt = np.zeros((len(data), N, n_bins))
+    mat_tr_unit_spt_mp = mp.Array('i', len(data) * N * n_bins)
+    global shared_array
+    shared_array = np.ctypeslib.as_array(mat_tr_unit_spt_mp.get_obj())
+    shared_array = shared_array.reshape(len(data), N, n_bins)
     for tr, sts in enumerate(data):
         bs = conv.BinnedSpikeTrain(sts, t_start=t_start, t_stop=t_stop, binsize=binsize)
         if binary is True:
@@ -630,7 +634,7 @@ def jointJ_window_analysis(
             raise ValueError(
                 "The method only works on the zero_one matrix at the moment")
         mat_tr_unit_spt[tr] = mat
-
+        shared_array[tr] = mat
 
     num_win = len(t_winpos)
     Js_win, n_exp_win, n_emp_win = (np.zeros(num_win) for _ in range(3))
@@ -643,12 +647,15 @@ def jointJ_window_analysis(
         pool = mp.Pool(processes=mp.cpu_count())
         print('Timing parallel')
         now = time.time()
-        l = [pool.apply(_parallel_UE, args=(i, win_pos,
-                                            mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime],
-                                            N, pattern_hash, method, num_tr))
+        l = [pool.apply_async(_parallel_ue, args=(i, win_pos,
+                                                  # mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime],
+                                                  winsize_bintime, N,
+                                                  pattern_hash, method,
+                                                  num_tr))
              for i, win_pos in enumerate(t_winpos_bintime)]
         print(time.time() - now, 'Time of parallel process')
-        for i in l:
+        for ii in l:
+            i = ii.get()
             idx = i[0]
             Js_win[idx] = i[1]
             rate_avg[idx] = i[2]
@@ -676,9 +683,9 @@ def jointJ_window_analysis(
                 'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}
 
 
-def _parallel_UE(i, win_pos, mat_win,
+def _parallel_ue(i, win_pos, winsize_bintime,
                  n, pattern_hash, method, num_tr):
-    # mat_win = mat_tr_unit_spt[:, :, win_pos:win_pos + winsize_bintime]
+    mat_win = shared_array[:, :, win_pos:win_pos + winsize_bintime]
     js_win_i, rate_avg_i, n_exp_win_i, n_emp_win_i, indices_lst = _UE(
         mat_win, n, pattern_hash, method)
     l_i = []

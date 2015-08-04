@@ -1,8 +1,8 @@
 import unitary_event_analysis as ue
 from test_ue_import import *
-import neo
 reload(misc)
 reload(ue)
+
 # Generate Data
 nTrials = 100        # number of trials
 T = 1000*pq.ms      # trial duration
@@ -32,20 +32,26 @@ pattern_hash = [3]
 significance_level = 0.01
 
 print 'calculating UEe ...'
-UE1 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash)
-UE2 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash, parallel=True)
+print 'running benchmarks ...'
 
+
+misc.run_benchmark_plot(ue.jointJ_window_analysis, spiketrain, binsize,
+                        winsize, winstep, pattern_hash)
+
+# UE1 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash)
+# UE2 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash, parallel=True)
 
 # plotting parameters
-Js_dict = {'events':{'':[]},
-     'save_fig': False,
-     'path_filename_format':'./UE.pdf',
-     'showfig':True,
-     'suptitle':True,
-     'figsize':(10,12),
-    'unit_ids':range(1,N+1,1),
-    'fontsize':15,
-    'linewidth':2}
+# Js_dict = {'events':{'':[]},
+#      'save_fig': False,
+#      'path_filename_format':'./UE.pdf',
+#      'showfig':True,
+#      'suptitle':True,
+#      'figsize':(10,12),
+#     'unit_ids':range(1,N+1,1),
+#     'fontsize':15,
+#     'linewidth':2}
 
 # misc._plot_UE(spiketrain,UE1,significance_level,binsize,winsize,winstep, pattern_hash,N,Js_dict,data)
-misc._plot_UE(spiketrain,UE1,significance_level,binsize,winsize,winstep, pattern_hash,N,Js_dict,data)
+# misc._plot_UE(spiketrain,UE2,significance_level,binsize,winsize,winstep, pattern_hash,N,Js_dict,data)
+
