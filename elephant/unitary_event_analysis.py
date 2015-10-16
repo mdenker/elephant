@@ -554,7 +554,7 @@ def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
 def jointJ_window_analysis(
     data, binsize, winsize, winstep, pattern_hash,
          method = 'analytic_TrialByTrial',t_start=None,
-        t_stop=None,binary = True, **args):
+        t_stop=None, binary = True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -644,7 +644,8 @@ def jointJ_window_analysis(
         indices_win['trial'+str(i)] = []
 
     if 'parallel' in args and args['parallel']:
-        pool = mp.Pool(processes=mp.cpu_count())
+        print(args['proc_count'])
+        pool = mp.Pool(processes=args['proc_count'])
         print('Timing parallel')
         now = time.time()
         l = [pool.apply_async(_parallel_ue, args=(i, win_pos,

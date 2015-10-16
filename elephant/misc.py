@@ -620,6 +620,61 @@ def run_benchmark_plot(func, spiketrain, binsize, winsize, winstep,
     _plot_benchmark_seaborn(benchmark)
 
 
+def benchmark_speedup_efficiency(func, spiketrain, binsize, winsize, winstep,
+                                 pattern_hash):
+    """
+    Benchmkars the speedup and efficieny of multiple processors from 1 to max
+    CPU count
+    """
+    import multiprocessing as mp
+
+    benchmark = dict()
+    proc_count = mp.cpu_count()
+    for i in range(1, proc_count + 1):
+        benchmark[i] = timeit.Timer(partial(func, spiketrain, binsize, winsize,
+                                            winstep, pattern_hash, parallel=True,
+                                            proc_count=i)).timeit(1)
+    _plot_speedup_efficiency(benchmark)
+
+
+def _plot_speedup_efficiency(benchmark):
+
+    try:
+        import seaborn as sns
+        sns.set_style(style='darkgrid')
+        sns.set_color_codes('pastel')
+    except ImportError:
+        import warnings
+        warnings.warn("Plotting module seaborn is not installed!")
+
+    serial_time = benchmark[1]
+    keys = sorted(benchmark.keys())
+    keys = numpy.array(keys)
+    speedup = []
+    efficiency = []
+    for number_processes in keys:
+        speedup.append(serial_time / benchmark[number_processes])
+        efficiency.append(speedup[-1] / number_processes)
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.add_subplot(211)
+    bar = plt.bar(keys - 0.5, speedup, width=1)
+    lin_speedup = plt.plot(keys, keys, 'k')
+    plt.ylabel('Speedup')
+    plt.legend([lin_speedup[0], bar], ['linear', 'actual'])
+    ax.set_xticks(range(1, keys[-1] + 1))
+    ax.set_xticklabels(range(1, keys[-1] + 1))
+    plt.xlim(0.5, keys[-1] + .5)
+
+    ax = fig.add_subplot(212)
+    plt.bar(keys - 0.5, efficiency, width=1)
+    plt.ylabel('Efficiency')
+    plt.xlabel('Number of processes')
+    ax.set_xticks(range(1, keys[-1] + 1))
+    ax.set_xticklabels(range(1, keys[-1] + 1))
+    plt.xlim(0.5, keys[-1] + .5)
+    plt.show()
+
+
 def _plot_benchmark(benchmarks):
     """
     Plot the benchmarks

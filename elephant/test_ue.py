@@ -5,7 +5,7 @@ reload(ue)
 
 # Generate Data
 nTrials = 100        # number of trials
-T = 1000*pq.ms      # trial duration
+T = 10000*pq.ms      # trial duration
 N = 2               # number of neurons
 
 # background rate
@@ -37,6 +37,8 @@ print 'running benchmarks ...'
 
 misc.run_benchmark_plot(ue.jointJ_window_analysis, spiketrain, binsize,
                         winsize, winstep, pattern_hash)
+# misc.benchmark_speedup_efficiency(ue.jointJ_window_analysis, spiketrain, binsize,
+#                                   winsize, winstep, pattern_hash)
 
 # UE1 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash)
 # UE2 = ue.jointJ_window_analysis(spiketrain, binsize, winsize, winstep, pattern_hash, parallel=True)
