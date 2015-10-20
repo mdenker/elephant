@@ -5,8 +5,8 @@ reload(ue)
 
 # Generate Data
 nTrials = 100        # number of trials
-T = 10000*pq.ms      # trial duration
-N = 2               # number of neurons
+T = 100000*pq.ms      # trial duration
+N = 2              # NUMBER of neurons
 
 # background rate
 freq_bg = 5*pq.Hz         # oscillatory

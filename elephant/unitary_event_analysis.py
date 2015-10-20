@@ -551,10 +551,9 @@ def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
     return Js, rate_avg, n_exp, n_emp,indices
 
 
-def jointJ_window_analysis(
-    data, binsize, winsize, winstep, pattern_hash,
-         method = 'analytic_TrialByTrial',t_start=None,
-        t_stop=None, binary = True, **args):
+def jointJ_window_analysis(data, binsize, winsize, winstep, pattern_hash,
+                           method='analytic_TrialByTrial', t_start=None,
+                           t_stop=None, binary=True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -644,8 +643,9 @@ def jointJ_window_analysis(
         indices_win['trial'+str(i)] = []
 
     if 'parallel' in args and args['parallel']:
-        print(args['proc_count'])
-        pool = mp.Pool(processes=args['proc_count'])
+        # print(args['proc_count'])
+        # pool = mp.Pool(processes=args['proc_count'])
+        pool = mp.Pool(mp.cpu_count())
         print('Timing parallel')
         now = time.time()
         l = [pool.apply_async(_parallel_ue, args=(i, win_pos,
@@ -678,7 +678,7 @@ def jointJ_window_analysis(
                 if len(indices_lst[j][0]) > 0:
                     indices_win['trial' + str(j)] = np.append(
                         indices_win['trial' + str(j)],
-                        indices_lst[j][0] + win_pos)
+                        indices_lst[j][0] + win_pos) 
         print(time.time() - now, 'Time of sequential process')
         return {'Js': Js_win, 'indices': indices_win, 'n_emp': n_emp_win,
                 'n_exp': n_exp_win, 'rate_avg': rate_avg / binsize}

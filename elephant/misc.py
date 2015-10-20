@@ -6,6 +6,7 @@ from scipy.optimize import curve_fit
 from functools import partial
 import neo
 import timeit
+from datetime import datetime
 import unitary_event_analysis as ue
 import elephant.spike_train_generation as stg
 
@@ -751,7 +752,8 @@ def _plot_benchmark_seaborn(benchmarks):
         # Emphasize the legend's frame box
         frame = legend.get_frame()
         frame.set_facecolor('gray')
-        # plt.savefig('benchmark.png')
+        t = datetime.now()
+        plt.savefig('benchmark-%s.png' % (t.strftime('%Y-%m-%d_%H:%M:%S')))
         plt.tight_layout()
         plt.show()
 
