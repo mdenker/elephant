@@ -34,7 +34,8 @@ static mxArray **plhs;
 static const mxArray **prhs;
 static PyObject *np_array_fun;
 static PyObject *ndarray_cls;
-static bool debug = false;
+static PyObject *block_cls;
+static bool debug = true;
 
 static PyObject *
 aview_write(PyObject *self, PyObject *args)
@@ -277,7 +278,76 @@ static mxArray* py2mat(PyObject *o) {
 		}
 		
 		return a;
-	} else if (PySequence_Check(o)) {
+	} else if (PyObject_IsInstance(o, block_cls)) {
+        PyObject *name = PyObject_GetAttrString(o, "name");  
+        PyObject *segs= PyObject_GetAttrString(o, "segments");
+        PyObject *seg = PyObject_GetItem(segs, PyInt_FromLong(0));
+        PyObject *spts= PyObject_GetAttrString(seg, "spiketrains");
+        PyObject *spt = PyObject_GetItem(spts, PyInt_FromLong(0));
+        PyObject *spikes= PyObject_GetAttrString(spt, "times");
+
+        /////////////////////// Construct struct
+        const char **fnames;
+        fnames = (const char **)mxCalloc(2, sizeof(*fnames));
+        fnames[0]="name";
+        fnames[1]="spiketrains";
+        
+        mxArray *blk=mxCreateStructMatrix(1, 1, 2, fnames);
+
+        /////////////////////// Convert name
+        mxArray *blkname = mxCreateString(PyString_AsString(name));
+        mxSetField(blk, 0, "name", blkname);
+        
+        
+        /////////////////////// Convert spike train
+
+        PyObject *spikeshape = PyObject_GetAttrString(spikes, "shape");
+        mwSize ndims = PySequence_Size(spikeshape);
+        mwSize *dims = new mwSize[ndims];
+        mwSize nelem = 1;
+        for (int i = 0; i < ndims; i++) {
+            PyObject *item = PySequence_GetItem(spikeshape, i);
+            dims[i] = PyInt_AsLong(item);
+            Py_DECREF(item);
+            nelem *= dims[i];
+        }
+        Py_DECREF(spikeshape);
+
+        if (debug) mexPrintf("ndims:%i\n", ndims);
+        if (debug) mexPrintf("dim 0:%i\n", dims[0]);
+
+        PyObject *lin_shape = PyList_New(1);
+        PyList_SetItem(lin_shape, 0, PyInt_FromLong(nelem));
+        PyObject *reshape_meth = PyObject_GetAttrString(spikes, "reshape");
+        PyObject *args = PyTuple_New(1);
+        PyObject *kwargs = PyDict_New();
+        PyTuple_SetItem(args, 0, lin_shape);
+        PyDict_SetItemString(kwargs, "order", PyString_FromString("F"));
+        PyObject *reshaped = PyObject_Call(reshape_meth, args, kwargs);
+        Py_DECREF(args);
+        Py_DECREF(kwargs);
+        Py_DECREF(reshape_meth);
+        // PyObject *reshaped = PyObject_CallMethod(o, "reshape", "O", lin_shape);
+        Py_DECREF(o);
+        PyObject *list = PyObject_CallMethod(reshaped, "tolist", NULL);
+        Py_DECREF(reshaped);
+
+        mxArray *blkspiketrains = mxCreateNumericArray(ndims, dims, mxDOUBLE_CLASS, mxREAL);
+        double *data = (double*) mxGetData(blkspiketrains);
+        for (size_t i = 0; i < nelem; i++) { \
+            PyObject *item = PyList_GetItem(list, i);
+            *data++ = (double) PyFloat_AsDouble(item);
+            Py_DECREF(item);
+        }
+
+        mxSetField(blk, 0, "spiketrains", blkspiketrains);
+
+        ///////////////////////        
+        
+        mxFree((void *)fnames);
+        Py_DECREF(o);
+        return blk;
+    } else if (PySequence_Check(o)) {
 		mwSize nelem = PySequence_Size(o);
 		mwSize dims[] = {nelem, 1};
 		mxArray *a = mxCreateCellArray(2, dims);
@@ -372,6 +442,11 @@ void mexFunction(int nlhs_, mxArray *plhs_[], int nrhs_, const mxArray *prhs_[])
 		Py_Initialize();
 		initaview();
 		globals = PyModule_GetDict(PyImport_AddModule("__main__"));
+        PyObject *o = PyRun_String("import sys\nsys.path.insert(0,'/home/denker/Projects/toolboxes/py/python-neo')\n", Py_file_input, globals, globals);
+        if (o == NULL) {
+            PyErr_Print();
+            mexErrMsgTxt("Error while evaluating path statement");
+        }   
 		PyObject *numpy = PyImport_ImportModule("numpy");
 		if (numpy == NULL) {
 			PyErr_Print();
@@ -386,6 +461,19 @@ void mexFunction(int nlhs_, mxArray *plhs_[], int nrhs_, const mxArray *prhs_[])
 		}
 		if (debug) mexPrintf("np_array_fun = 0x%08X\n", np_array_fun);
 		ndarray_cls = PyDict_GetItemString(numpy_dict, "ndarray");
+
+        PyObject *neo = PyImport_ImportModule("neo");
+        if (neo== NULL) {
+            PyErr_Print();
+            mexErrMsgTxt("Neo not accessible");
+        }
+        PyObject *neo_dict = PyModule_GetDict(neo);
+        if (debug) mexPrintf("block_cls = 0x%08X\n", block_cls);
+        block_cls = PyDict_GetItemString(neo_dict, "Block");
+        if (block_cls == 0) {
+            PyErr_Print();
+            mexErrMsgTxt("neo.Block not accessible");
+        }
 		been_here = true;
 	}
 
