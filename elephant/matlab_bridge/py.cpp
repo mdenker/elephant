@@ -285,14 +285,16 @@ static mxArray* py2mat(PyObject *o) {
         PyObject *spts= PyObject_GetAttrString(seg, "spiketrains");
         PyObject *spt = PyObject_GetItem(spts, PyInt_FromLong(0));
         PyObject *spikes= PyObject_GetAttrString(spt, "times");
+        PyObject *spikeunit= PyObject_GetAttrString(spt, "units");
 
         /////////////////////// Construct struct
         const char **fnames;
-        fnames = (const char **)mxCalloc(2, sizeof(*fnames));
+        fnames = (const char **)mxCalloc(3, sizeof(*fnames));
         fnames[0]="name";
         fnames[1]="spiketrains";
+        fnames[2]="units";
         
-        mxArray *blk=mxCreateStructMatrix(1, 1, 2, fnames);
+        mxArray *blk=mxCreateStructMatrix(1, 1, 3, fnames);
 
         /////////////////////// Convert name
         mxArray *blkname = mxCreateString(PyString_AsString(name));
@@ -312,9 +314,6 @@ static mxArray* py2mat(PyObject *o) {
             nelem *= dims[i];
         }
         Py_DECREF(spikeshape);
-
-        if (debug) mexPrintf("ndims:%i\n", ndims);
-        if (debug) mexPrintf("dim 0:%i\n", dims[0]);
 
         PyObject *lin_shape = PyList_New(1);
         PyList_SetItem(lin_shape, 0, PyInt_FromLong(nelem));
@@ -341,6 +340,13 @@ static mxArray* py2mat(PyObject *o) {
         }
 
         mxSetField(blk, 0, "spiketrains", blkspiketrains);
+
+        ///////////////////////        
+        PyObject *args2 = PyTuple_New(0);
+        PyObject *kwargs2 = PyTuple_New(0);
+        PyObject *unitstr=PyObject_Call(PyObject_GetAttrString(spikeunit, "__str__"), args2, kwargs2);
+        mxArray *unitsname = mxCreateString(PyString_AsString(unitstr));
+        mxSetField(blk, 0, "units", unitsname);
 
         ///////////////////////        
         
