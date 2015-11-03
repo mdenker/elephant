@@ -14,6 +14,8 @@ py('eval',py_command);
 %Get data from python
 py_import('nikos_blk');
 
-disp(nikos_blk.name)
+disp(nikos_blk.name);
+disp(nikos_blk.spiketrains(1:10));
+disp(nikos_blk.units);
 
 plot(nikos_blk.spiketrains,zeros(length(nikos_blk.spiketrains),1),'x');
