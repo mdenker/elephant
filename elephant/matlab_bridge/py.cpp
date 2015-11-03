@@ -35,7 +35,7 @@ static const mxArray **prhs;
 static PyObject *np_array_fun;
 static PyObject *ndarray_cls;
 static PyObject *block_cls;
-static bool debug = true;
+static bool debug = false;
 
 static PyObject *
 aview_write(PyObject *self, PyObject *args)
