@@ -282,27 +282,51 @@ static mxArray* py2mat(PyObject *o) {
         PyObject *name = PyObject_GetAttrString(o, "name");  
         PyObject *segs= PyObject_GetAttrString(o, "segments");
         PyObject *seg = PyObject_GetItem(segs, PyInt_FromLong(0));
+        PyObject *segname = PyObject_GetAttrString(seg, "name");  
         PyObject *spts= PyObject_GetAttrString(seg, "spiketrains");
         PyObject *spt = PyObject_GetItem(spts, PyInt_FromLong(0));
+        PyObject *sptname = PyObject_GetAttrString(spt, "name");  
         PyObject *spikes= PyObject_GetAttrString(spt, "times");
         PyObject *spikeunit= PyObject_GetAttrString(spt, "units");
 
         /////////////////////// Construct struct
         const char **fnames;
-        fnames = (const char **)mxCalloc(3, sizeof(*fnames));
+        fnames = (const char **)mxCalloc(2, sizeof(*fnames));
         fnames[0]="name";
-        fnames[1]="spiketrains";
-        fnames[2]="units";
+        fnames[1]="segments";
         
-        mxArray *blk=mxCreateStructMatrix(1, 1, 3, fnames);
+        mxArray *blk=mxCreateStructMatrix(1, 1, 2, fnames);
 
+        const char **fnames2;
+        fnames2 = (const char **)mxCalloc(2, sizeof(*fnames2));
+        fnames2[0]="name";
+        fnames2[1]="spiketrains";
+        
+        mxArray *mseg=mxCreateStructMatrix(1, 1, 2, fnames2);
+        
+        const char **fnames3;
+        fnames3 = (const char **)mxCalloc(3, sizeof(*fnames3));
+        fnames3[0]="name";
+        fnames3[1]="times";
+        fnames3[2]="units";
+        
+        mxArray *mspt=mxCreateStructMatrix(1, 1, 3, fnames3);
+        
+
+        /////////////////////// Create hierarchy
+        mxSetField(blk, 0, "segments", mseg);
+        mxSetField(mseg, 0, "spiketrains", mspt);
+        
         /////////////////////// Convert name
         mxArray *blkname = mxCreateString(PyString_AsString(name));
         mxSetField(blk, 0, "name", blkname);
+        mxArray *msegname = mxCreateString(PyString_AsString(segname));
+        mxSetField(mseg, 0, "name", msegname);
+        mxArray *msptname = mxCreateString(PyString_AsString(sptname));
+        mxSetField(mspt, 0, "name", msptname);
         
         
         /////////////////////// Convert spike train
-
         PyObject *spikeshape = PyObject_GetAttrString(spikes, "shape");
         mwSize ndims = PySequence_Size(spikeshape);
         mwSize *dims = new mwSize[ndims];
@@ -339,14 +363,14 @@ static mxArray* py2mat(PyObject *o) {
             Py_DECREF(item);
         }
 
-        mxSetField(blk, 0, "spiketrains", blkspiketrains);
+        mxSetField(mspt, 0, "times", blkspiketrains);
 
         ///////////////////////        
         PyObject *args2 = PyTuple_New(0);
         PyObject *kwargs2 = PyTuple_New(0);
         PyObject *unitstr=PyObject_Call(PyObject_GetAttrString(spikeunit, "__str__"), args2, kwargs2);
         mxArray *unitsname = mxCreateString(PyString_AsString(unitstr));
-        mxSetField(blk, 0, "units", unitsname);
+        mxSetField(mspt, 0, "units", unitsname);
 
         ///////////////////////        
         
