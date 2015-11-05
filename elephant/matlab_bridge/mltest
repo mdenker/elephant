@@ -1,0 +1,2 @@
+#!/bin/bash
+matlab -nosplash -nojvm -nodisplay -r load_blackrock
