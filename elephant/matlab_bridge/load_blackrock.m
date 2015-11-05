@@ -23,7 +23,9 @@ disp(sprintf('Importing Neo block to Matlab\n-----------------------------------
 py_import('nikos_blk');
 
 disp(nikos_blk.name);
-disp(nikos_blk.spiketrains(1:10)');
-disp(nikos_blk.units);
+disp(nikos_blk.segments.name);
+disp(nikos_blk.segments.spiketrains.name);
+disp(nikos_blk.segments.spiketrains.times(1:10)');
+disp(nikos_blk.segments.spiketrains.units);
 
-plot(nikos_blk.spiketrains,zeros(length(nikos_blk.spiketrains),1),'x');
+plot(nikos_blk.segments.spiketrains.times,zeros(length(nikos_blk.segments.spiketrains.times),1),'x');
