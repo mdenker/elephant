@@ -1,0 +1,3 @@
+# source me!
+export PYTHON_PATH=~/bin/anaconda/envs/stdpy/lib/python2.7/site-packages/
+export LD_LIBRARY_PATH=/home/denker/bin/anaconda/envs/stdpy/lib/:$LD_LIBRARY_PATH
