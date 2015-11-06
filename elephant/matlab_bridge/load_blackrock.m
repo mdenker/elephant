@@ -1,7 +1,5 @@
 %Define python code to run
 py_command=sprintf([
-    'import sys\n' ...
-    'sys.path.insert(0, "/home/denker/Projects/toolboxes/py/python-neo")\n'...
     'import neo\n' ...
     'nikos_session=neo.io.BlackrockIO("/home/denker/DatasetsCached/reachgrasp/DataNikos2/i140701-001")\n'...
     'nikos_blk=nikos_session.read_block(nsx=None,units=[],waveforms=False)\n'...
@@ -25,7 +23,7 @@ py_import('nikos_blk');
 disp(nikos_blk.name);
 disp(nikos_blk.segments.name);
 disp(nikos_blk.segments.spiketrains.name);
-disp(nikos_blk.segments.spiketrains.times(1:10)');
+disp(nikos_blk.segments.spiketrains.times(1:6)');
 disp(nikos_blk.segments.spiketrains.units);
 
 plot(nikos_blk.segments.spiketrains.times,zeros(length(nikos_blk.segments.spiketrains.times),1),'x');
