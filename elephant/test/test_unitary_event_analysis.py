@@ -190,7 +190,12 @@ class UETestCase(unittest.TestCase):
         winsize = 15*pq.ms
         winstep = 3*pq.ms
         expected = [ 10., 13., 16., 19., 22., 25., 28., 31.]*pq.ms
-        self.assertTrue(np.allclose(ue._winpos(t_start, t_stop, winsize, winstep,position='left-edge'),expected))
+        self.assertTrue(
+            np.allclose(
+                ue._winpos(
+                    t_start, t_stop, winsize, 
+                    winstep).rescale('ms').magnitude,
+                expected.rescale('ms').magnitude))
 
     def test__UE(self):
         mat = np.array([[[1, 1, 1, 1, 0],
