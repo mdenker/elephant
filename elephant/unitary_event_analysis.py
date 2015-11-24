@@ -5,36 +5,37 @@ import warnings
 import elephant.conversion as conv
 import scipy
 
-def hash(m, N, base=2):
+
+def hash_from_pattern(m, N, base=2):
     """
-    Calculate for a spike pattern or a matrix of spike patterns 
-    (provide each pattern as a column) composed of N neurons a 
+    Calculate for a spike pattern or a matrix of spike patterns
+    (provide each pattern as a column) composed of N neurons a
     unique number.
-    
-    
+
+
     Parameters:
     -----------
     m: list of integers
-           matrix of 0-1 patterns as columns, 
+           matrix of 0-1 patterns as columns,
            shape: (number of neurons, number of patterns)
     N: integer
-           number of neurons is required to be equal to the number 
+           number of neurons is required to be equal to the number
            of rows
     base: integer
-           base for calculation of the number from binary 
-           sequences (= pattern). 
+           base for calculation of the number from binary
+           sequences (= pattern).
            Default is 2
-    
+
     Returns:
     --------
     list of integers:
            An array containing the hash values of each pattern,
            shape: (number of patterns)
-    
+
     Raises:
     -------
        ValueError: if matrix m has wrong orientation
-    
+
     Examples:
     ---------
     descriptive example:
@@ -50,14 +51,13 @@ def hash(m, N, base=2):
     >>> m = np.array([[0, 1, 0, 0, 1, 1, 0, 1],
                          [0, 0, 1, 0, 1, 0, 1, 1],
                          [0, 0, 0, 1, 0, 1, 1, 1]])
-    
-    >>> hash(m,N=3)
+
+    >>> hash_from_pattern(m,N=3)
         array([0, 4, 2, 1, 6, 5, 3, 7])
     """
     # check the consistency between shape of m and number neurons N
     if N != np.shape(m)[0]:
         raise ValueError('patterns in the matrix should be column entries')
-
 
     # generate the representation for binary system
     v = np.array([base**x for x in range(N)])
@@ -67,29 +67,29 @@ def hash(m, N, base=2):
     return np.dot(v,m)
 
 
-def inv_hash(h,N,base=2):
+def inverse_hash_from_pattern(h, N, base=2):
     """
     Calculate the 0-1 spike patterns (matrix) from hash values
-    
+
     Parameters:
     -----------
     h: list of integers
            list or array of hash values, length: number of patterns
     N: integer
            number of neurons
-    base: integer 
-           base for calculation of the number from binary 
+    base: integer
+           base for calculation of the number from binary
            sequences (= pattern).
            Default is 2
-           
+
     Raises:
     -------
-       ValueError: if the hash is not compatible with the number 
-       of neurons hash value should not be larger than the biggest 
+       ValueError: if the hash is not compatible with the number
+       of neurons hash value should not be larger than the biggest
        possible hash number with given number of neurons
        (e.g. for N = 2, max(hash) = 2^1 + 2^0 = 3
             , or for N = 4, max(hash) = 2^3 + 2^2 + 2^1 + 2^0 = 15)
-    
+
     Returns:
     --------
        numpy.array:
@@ -100,13 +100,13 @@ def inv_hash(h,N,base=2):
     >>> import numpy as np
     >>> h = np.array([3,7])
     >>> N = 4
-    >>> inv_hash(h,N)
+    >>> inverse_hash_from_pattern(h,N)
         array([[1, 1],
                [1, 1],
                [0, 1],
                [0, 0]])
     """
-    
+
     # check if the hash values are not bigger than possible hash value
     # for N neuron with basis = base
     if np.any(h > np.sum([base**x for x in range(N)])):
@@ -116,48 +116,48 @@ def inv_hash(h,N,base=2):
     if not np.all(np.int64(h) == h):
         raise ValueError("hash values are not integers")
 
-    m = np.zeros((N,len(h)), dtype=int) 
+    m = np.zeros((N,len(h)), dtype=int)
     for j, hh in enumerate(h):
         i = N-1
-        while i>=0 and hh != 0:
-            m[i,j] = hh % base
-            hh = hh / base
+        while i >= 0 and hh != 0:
+            m[i, j] = hh % base
+            hh /= base
             i -= 1
-    return m        
+    return m
 
 
-def n_emp_mat(mat,N, pattern_hash,base=2):
+def n_emp_mat(mat, N, pattern_hash, base=2):
     """
-    Calculates empirical number of observed patterns expressed 
+    Calculates empirical number of observed patterns expressed
     by their hash values
-    
+
     Parameters:
     -----------
     m: list of integers
-           matrix of 0-1 patterns as columns, 
+           matrix of 0-1 patterns as columns,
            shape: (number of neurons N, number of patterns)
     N: integer
            number of neurons
     pattern_hash: list of integers
             array of hash values. Length defines number of patterns
-    base: integer 
-           base for calculation of the number from binary 
+    base: integer
+           base for calculation of the number from binary
            sequences (= pattern).
            Default is 2
 
     Returns:
     --------
     N_emp: list of integers
-           empirical number of each observed pattern. 
-           Same length as pattern_hash 
+           empirical number of each observed pattern.
+           Same length as pattern_hash
     indices: list of list of integers
-           list of indices of mat per entry of pattern_hash. 
-           indices[i] = N_emp[i] = pattern_hash[i] 
+           list of indices of mat per entry of pattern_hash.
+           indices[i] = N_emp[i] = pattern_hash[i]
 
     Raises:
     -------
        ValueError: if mat is not zero-one matrix
-       
+
     Examples:
     ---------
     >>> mat = np.array([[1, 0, 0, 1, 1],
@@ -172,7 +172,7 @@ def n_emp_mat(mat,N, pattern_hash,base=2):
     # check if the mat is zero-one matrix
     if np.any(mat>1) or np.any(mat<0):
         raise ValueError("entries of mat should be either one or zero")
-    h = hash(mat,N,base = base)
+    h = hash_from_pattern(mat, N, base = base)
     N_emp = np.zeros(len(pattern_hash))
     indices = []
     for p_h_idx, p_h in enumerate(pattern_hash):
@@ -183,10 +183,10 @@ def n_emp_mat(mat,N, pattern_hash,base=2):
     return N_emp, indices
 
 
-def n_emp_mat_sum_trial(mat, N,pattern_hash):
+def n_emp_mat_sum_trial(mat, N, pattern_hash):
     """
     Calculates empirical number of observed patterns summed across trials
-    
+
     Parameters:
     -----------
     mat: 3d numpy array
@@ -198,25 +198,25 @@ def n_emp_mat_sum_trial(mat, N,pattern_hash):
             number of neurons
     pattern_hash: list of integers
             array of hash values, length: number of patterns
-    
+
 
     Returns:
     --------
     N_empL list of integers
-           empirical number of observed pattern summed across trials, 
+           empirical number of observed pattern summed across trials,
            length: number of patterns (i.e. len(patter_hash))
     idx_trials: list of list of integers
-           list of indices of mat for each trial in which 
+           list of indices of mat for each trial in which
            the specific pattern has been observed.
            0-axis --> trial
-           1-axis --> list of indices for the chosen trial per 
+           1-axis --> list of indices for the chosen trial per
            entry of pattern_hash
-    
+
     Raises:
     -------
        ValueError: if matrix mat has wrong orientation
        ValueError: if mat is not zero-one matrix
-       
+
     Examples:
     ---------
     >>> mat = np.array([[[1, 1, 1, 1, 0],
@@ -229,7 +229,7 @@ def n_emp_mat_sum_trial(mat, N,pattern_hash):
 
     >>> pattern_hash = np.array([4,6])
     >>> N = 3
-    >>> n_emp_sum_trial, n_emp_sum_trial_idx = 
+    >>> n_emp_sum_trial, n_emp_sum_trial_idx =
                              n_emp_mat_sum_trial(mat, N,pattern_hash)
     >>> n_emp_sum_trial
         array([ 1.,  3.])
@@ -255,7 +255,7 @@ def n_emp_mat_sum_trial(mat, N,pattern_hash):
     return N_emp, idx_trials
 
 
-def _sts_overlap(sts, t_start = None, t_stop = None):
+def _sts_overlap(sts, t_start=None, t_stop=None):
     """
     Find the internal range t_start, t_stop where all spike trains are
     defined; cut all spike trains taking that time range only
@@ -284,7 +284,7 @@ def _sts_overlap(sts, t_start = None, t_stop = None):
 def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     """
     Calculates the expected joint probability for each spike pattern
-    
+
     Parameters:
     -----------
     mat: 2d numpy array
@@ -295,7 +295,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
             array of hash values, length: number of patterns
     method: string
             method with which the expectency should be caculated
-            'analytic' -- > analytically 
+            'analytic' -- > analytically
             'surr' -- > with surrogates (spike time randomization)
             Default is 'analytic'
     kwargs:
@@ -303,7 +303,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     n_surr: integer
             number of surrogate to be used
             Default is 3000
-    
+
     Raises:
     -------
        ValueError: if matrix m has wrong orientation
@@ -315,7 +315,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
            An array containing the expected joint probability of each pattern,
            shape: (number of patterns,)
     if method is surr:
-        numpy.ndarray, 0-axis --> different realizations, 
+        numpy.ndarray, 0-axis --> different realizations,
                        length = number of surrogates
                        1-axis --> patterns
 
@@ -329,7 +329,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     >>> n_exp_anal = n_exp_mat(mat,N, pattern_hash, method = 'analytic')
     >>> n_exp_anal
         [ 0.5 1.5 ]
-    >>> 
+    >>>
     >>>
     >>> n_exp_surr = n_exp_mat(
                   mat, N,pattern_hash, method = 'surr', n_surr = 5000)
@@ -337,32 +337,32 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     [[ 1.  1.]
      [ 2.  0.]
      [ 2.  0.]
-     ..., 
+     ...,
      [ 2.  0.]
      [ 2.  0.]
      [ 1.  1.]]
-     
+
     """
     # check if the mat is zero-one matrix
     if np.any(mat > 1) or np.any(mat < 0):
         raise ValueError("entries of mat should be either one or zero")
-    
+
     if method == 'analytic':
         marg_prob = np.mean(mat,1,dtype=float)
-        #marg_prob needs to be a column vector, so we 
-        #build a two dimensional array with 1 column 
-        #and len(marg_prob) rows
+        # marg_prob needs to be a column vector, so we
+        # build a two dimensional array with 1 column
+        # and len(marg_prob) rows
         marg_prob = np.reshape(marg_prob,(len(marg_prob),1))
-        m = inv_hash(pattern_hash, N)
-        nrep = np.shape(m)[1] 
-        # multipyling the marginal probability of neurons with regard to the pattern 
+        m = inverse_hash_from_pattern(pattern_hash, N)
+        nrep = np.shape(m)[1]
+        # multipyling the marginal probability of neurons with regard to the pattern
         pmat = np.multiply(m,np.tile(marg_prob,(1,nrep))) +\
                np.multiply(1-m,np.tile(1-marg_prob,(1,nrep)))
         return np.prod(pmat,axis=0)*float(np.shape(mat)[1])
     if method == 'surr':
-        if 'n_surr' in kwargs: 
-            n_surr = kwargs['n_surr'] 
-        else: 
+        if 'n_surr' in kwargs:
+            n_surr = kwargs['n_surr']
+        else:
             n_surr = 3000.
         N_exp_array = np.zeros((n_surr,len(pattern_hash)))
         for rz_idx, rz in enumerate(np.arange(n_surr)):
@@ -374,13 +374,13 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
 
 def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
     """
-    Calculates the expected joint probability 
+    Calculates the expected joint probability
     for each spike pattern sum over trials
-    
+
     Parameters:
     -----------
     mat: 3d numpy array
-            the entries are zero or one            
+            the entries are zero or one
             0-axis --> trials
             1-axis --> neurons
             2-axis --> time bins
@@ -390,18 +390,18 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
             array of hash values, length: number of patterns
     method: string
             method with which the unitary events whould be computed
-            'analytic_TrialByTrial' -- > calculate the expectency 
+            'analytic_TrialByTrial' -- > calculate the expectency
             (analytically) on each trial, then sum over all trials.
             ''analytic_TrialAverage' -- > calculate the expectency
             by averaging over trials.
             Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
-    
+
 
     Returns:
     --------
     numpy.array:
-       An array containing the expected joint probability of 
+       An array containing the expected joint probability of
        each pattern summed over trials,shape: (number of patterns,)
 
     Examples:
@@ -436,23 +436,23 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
         raise ValueError(
             "The method only works on the zero_one matrix at the moment")
 
-    return n_exp        
+    return n_exp
 
 
 def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial'):
     """
-    computes the expected coincidences and a function to calculate 
+    computes the expected coincidences and a function to calculate
     p-value for given empirical coincidences
-    
-    this function generate a poisson distribution with the expected 
-    value calculated by mat. it returns a function which gets 
-    the empirical coincidences, `n_emp`,  and calculates a p-value 
+
+    this function generate a poisson distribution with the expected
+    value calculated by mat. it returns a function which gets
+    the empirical coincidences, `n_emp`,  and calculates a p-value
     as the area under the poisson distribution from `n_emp` to infinity
 
     Parameters:
     -----------
     mat: 3d numpy array
-            the entries are zero or one    
+            the entries are zero or one
             0-axis --> trials
             1-axis --> neurons
             2-axis --> time bins
@@ -462,18 +462,18 @@ def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial'):
             array of hash values, length: number of patterns
     method: string
             method with which the unitary events whould be computed
-            'analytic_TrialByTrial' -- > calculate the expectency 
+            'analytic_TrialByTrial' -- > calculate the expectency
             (analytically) on each trial, then sum over all trials.
             ''analytic_TrialAverage' -- > calculate the expectency
             by averaging over trials.
             Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
-    
+
 
     Returns:
     --------
-    pval_anal: 
-            a function which calculates the p-value for 
+    pval_anal:
+            a function which calculates the p-value for
             the given empirical coincidences
     n_exp: list of floats
             expected coincidences
@@ -504,22 +504,22 @@ def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial'):
 
 
 def jointJ(p_val):
-    """Surprise measurement                                                                                     
-    
-    logarithmic transformation of joint-p-value into surprise measure 
-    for better visualization as the highly significant events are 
+    """Surprise measurement
+
+    logarithmic transformation of joint-p-value into surprise measure
+    for better visualization as the highly significant events are
     indicated by very low joint-p-values
 
     Parameters:
     -----------
     p_val: list of floats
         p-values of statistical tests for different pattern.
-                                                                                                 
+
     Returns:
     --------
     J: list of floats
         list of surprise measure
-            
+
     Examples:
     ---------
     >>> p_val = np.array([0.31271072,  0.01175031])
@@ -572,10 +572,10 @@ def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
     return ts_winpos
 
 
-def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
+def _UE(mat, N, pattern_hash, method='analytic_TrialByTrial'):
     """
-    returns the default results of unitary events analysis 
-    (Surprise, empirical coincidences and index of where it happened 
+    returns the default results of unitary events analysis
+    (Surprise, empirical coincidences and index of where it happened
     in the given mat, n_exp and average rate of neurons)
     """
     rate_avg = _rate_mat_avg_trial(mat)
@@ -587,9 +587,9 @@ def _UE(mat,N, pattern_hash,method = 'analytic_TrialByTrial'):
 
 
 def jointJ_window_analysis(
-    data, binsize, winsize, winstep, pattern_hash,
-         method = 'analytic_TrialByTrial',t_start=None, 
-        t_stop=None,binary = True, **args):
+        data, binsize, winsize, winstep, pattern_hash,
+        method='analytic_TrialByTrial', t_start=None,
+        t_stop=None, binary=True, **args):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -600,24 +600,24 @@ def jointJ_window_analysis(
                                         0-axis --> Trials
                                         1-axis --> Neurons
                                         2-axis --> Spike times
-    binsize: Qunatity scalar with dimension time 
+    binsize: Qunatity scalar with dimension time
            size of bins for descritizing spike trains
-    winsize: Qunatity scalar with dimension time 
+    winsize: Qunatity scalar with dimension time
            size of the window of analysis
-    winstep: Qunatity scalar with dimension time 
+    winstep: Qunatity scalar with dimension time
            size of the window step
     pattern_hash: list of integers
-           list of interested patterns in hash values 
-           (see hash and inv_hash functions)
+           list of interested patterns in hash values
+           (see hash_from_pattern and inverse_hash_from_pattern functions)
     method: string
             method with which the unitary events whould be computed
-            'analytic_TrialByTrial' -- > calculate the expectency 
+            'analytic_TrialByTrial' -- > calculate the expectency
             (analytically) on each trial, then sum over all trials.
             ''analytic_TrialAverage' -- > calculate the expectency
             by averaging over trials.
             Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
-    
+
     Returns:
     -------
     result: dictionary
@@ -626,7 +626,7 @@ def jointJ_window_analysis(
                  shape: different pattern hash --> 0-axis
                         different window --> 1-axis
           indices: list of list of integers
-                 list of indices of pattern whithin each window 
+                 list of indices of pattern whithin each window
                  shape: different pattern hash --> 0-axis
                         different window --> 1-axis
           n_emp: list of integers
@@ -646,7 +646,6 @@ def jointJ_window_analysis(
     if not isinstance(data[0][0],neo.SpikeTrain):
         raise ValueError("structure of the data is not correct: 0-axis should be trials, 1-axis units and 2-axis neo spike trains")
 
-    
     if t_start is None: t_start = data[0][0].t_start.rescale('ms')
     if t_stop is None: t_stop = data[0][0].t_stop.rescale('ms')
 
@@ -666,7 +665,7 @@ def jointJ_window_analysis(
         warnings.warn(
             "ratio between winsize and binsize is not integer -- "
             "the actual number for window size is" + str(winstep_bintime * binsize))
-    
+
     num_tr, N = np.shape(data)[:2]
 
     n_bins = int((t_stop - t_start)/binsize)
