@@ -9,9 +9,93 @@ import numpy as np
 import quantities as pq
 import types
 import elephant.unitary_event_analysis as ue
-
+import neo
 
 class UETestCase(unittest.TestCase):
+
+    def setUp(self):
+        sts1_with_trial = [[  26.,   48.,   78.,  144.,  178.],
+                           [   4.,   45.,   85.,  123.,  156.,  185.],
+                           [  22.,   53.,   73.,   88.,  120.,  147.,  167.,  193.],
+                           [  23.,   49.,   74.,  116.,  142.,  166.,  189.],
+                           [   5.,   34.,   54.,   80.,  108.,  128.,  150.,  181.],
+                           [  18.,   61.,  107.,  170.],
+                           [  62.,   98.,  131.,  161.],
+                           [  37.,   63.,   86.,  131.,  168.],
+                           [  39.,   76.,  100.,  127.,  153.,  198.],
+                           [   3.,   35.,   60.,   88.,  108.,  141.,  171.,  184.],
+                           [  39.,  170.],
+                           [  25.,   68.,  170.],
+                           [  19.,   57.,   84.,  116.,  157.,  192.],
+                           [  17.,   80.,  131.,  172.],
+                           [  33.,   65.,  124.,  162.,  192.],
+                           [  58.,   87.,  185.],
+                           [  19.,  101.,  174.],
+                           [  84.,  118.,  156.,  198.,  199.],
+                           [   5.,   55.,   67.,   96.,  114.,  148.,  172.,  199.],
+                           [  61.,  105.,  131.,  169.,  195.],
+                           [  26.,   96.,  129.,  157.],
+                           [  41.,   85.,  157.,  199.],
+                           [   6.,   30.,   53.,   76.,  109.,  142.,  167.,  194.],
+                           [ 159.],
+                           [   6.,   51.,   78.,  113.,  154.,  183.],
+                           [ 138.],
+                           [  23.,   59.,  154.,  185.],
+                           [  12.,   14.,   52.,   54.,  109.,  145.,  192.],
+                           [  29.,   61.,   84.,  122.,  145.,  168.],
+                           [ 26.,  99.],
+                           [   3.,   31.,   55.,   85.,  108.,  158.,  191.],
+                           [   5.,   37.,   70.,  119.,  170.],
+                           [  38.,   79.,  117.,  157.,  192.],
+                           [ 174.],
+                           [ 114.],
+                           []]
+        sts2_with_trial = [[   3.,  119.],
+                           [  54.,  155.,  183.],
+                           [  35.,  133.],
+                           [  25.,  100.,  176.],
+                           [  9.,  98.],
+                           [   6.,   97.,  198.],
+                           [   7.,   62.,  148.],
+                           [ 100.,  158.],
+                           [   7.,   62.,  122.,  179.,  191.],
+                           [ 125.,  182.],
+                           [  30.,   55.,  127.,  157.,  196.],
+                           [  27.,   70.,  173.],
+                           [  82.,   84.,  198.],
+                           [  11.,   29.,  137.],
+                           [   5.,   49.,   61.,  101.,  142.,  190.],
+                           [  78.,  162.,  178.],
+                           [  13.,   14.,  130.,  172.],
+                           [ 22.],
+                           [  16.,   55.,  109.,  113.,  175.],
+                           [  17.,   33.,   63.,  102.,  144.,  189.,  190.],
+                           [ 58.],
+                           [  27.,   30.,   99.,  145.,  176.],
+                           [  10.,   58.,  116.,  182.],
+                           [  14.,   68.,  104.,  126.,  162.,  194.],
+                           [  56.,  129.,  196.],
+                           [  50.,   78.,  105.,  152.,  190.,  197.],
+                           [  24.,   66.,  113.,  117.,  161.],
+                           [   9.,   31.,   81.,   95.,  136.,  154.],
+                           [  10.,  115.,  185.,  191.],
+                           [  71.,  140.,  157.],
+                           [  15.,   27.,   88.,  102.,  103.,  151.,  181.,  188.],
+                           [  51.,   75.,   95.,  134.,  195.],
+                           [  18.,   55.,   75.,  131.,  186.],
+                           [  10.,   16.,   41.,   42.,   75.,  127.],
+                           [  62.,   76.,  102.,  145.,  171.,  183.],
+                           [  66.,   71.,   85.,  140.,  154.]]
+        self.sts1_neo = [neo.SpikeTrain(
+            i*pq.ms,t_stop = 200*pq.ms) for i in sts1_with_trial]
+        self.sts2_neo = [neo.SpikeTrain(
+            i*pq.ms,t_stop = 200*pq.ms) for i in sts2_with_trial]
+        self.binary_sts = np.array([[[1, 1, 1, 1, 0],
+                                     [0, 1, 1, 1, 0],
+                                     [0, 1, 1, 0, 1]],
+                                    [[1, 1, 1, 1, 1],
+                                     [0, 1, 1, 1, 1],
+                                     [1, 1, 0, 1, 0]]])
 
     def test_hash_default(self):
         m = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
@@ -85,13 +169,7 @@ class UETestCase(unittest.TestCase):
             self.assertTrue(np.allclose(expected2[item_cnt],item))
 
     def test_n_emp_mat_sum_trial_default(self):
-        mat = np.array([[[1, 1, 1, 1, 0],
-                         [0, 1, 1, 1, 0],
-                         [0, 1, 1, 0, 1]],
-
-                        [[1, 1, 1, 1, 1],
-                         [0, 1, 1, 1, 1],
-                         [1, 1, 0, 1, 0]]])
+        mat = self.binary_sts
         pattern_hash = np.array([4,6])
         N = 3
         expected1 = np.array([ 1.,  3.])
@@ -101,6 +179,20 @@ class UETestCase(unittest.TestCase):
         for item0_cnt,item0 in enumerate(n_emp_idx):
             for item1_cnt,item1 in enumerate(item0):
                 self.assertTrue(np.allclose(expected2[item0_cnt][item1_cnt],item1))
+
+    def test_n_emp_mat_sum_trial_TrialAverge(self):
+        mat = self.binary_sts
+        pattern_hash = np.array([4,6])
+        N = 3
+        expected1 = np.array([ 1./len(mat),  3./len(mat)])
+        expected2 = [[[0], [3]],[[],[2,4]]]
+        n_emp, n_emp_idx = ue.n_emp_mat_sum_trial(
+            mat, N, pattern_hash, method='analytic_TrialAverage')
+        self.assertTrue(np.all(n_emp == expected1))
+        for item0_cnt,item0 in enumerate(n_emp_idx):
+            for item1_cnt,item1 in enumerate(item0):
+                self.assertTrue(np.allclose(expected2[item0_cnt][item1_cnt],item1))
+
 
     def test_n_emp_mat_sum_trial_ValueError(self):
         mat = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
@@ -116,13 +208,7 @@ class UETestCase(unittest.TestCase):
         self.assertTrue(np.allclose(expected,nexp))
 
     def test_n_exp_mat_sum_trial_default(self):
-        mat = np.array([[[1, 1, 1, 1, 0],
-                         [0, 1, 1, 1, 0],
-                         [0, 1, 1, 0, 1]],
-
-                        [[1, 1, 1, 1, 1],
-                         [0, 1, 1, 1, 1],
-                         [1, 1, 0, 1, 0]]])
+        mat = self.binary_sts
         pattern_hash = np.array([5,6])
         N = 3
         expected = np.array([ 1.56,  2.56])
@@ -130,18 +216,20 @@ class UETestCase(unittest.TestCase):
         self.assertTrue(np.allclose(n_exp,expected))
 
     def test_n_exp_mat_sum_trial_TrialAverage(self):
-        mat = np.array([[[1, 1, 1, 1, 0],
-                         [0, 1, 1, 1, 0],
-                         [0, 1, 1, 0, 1]],
-
-                        [[1, 1, 1, 1, 1],
-                         [0, 1, 1, 1, 1],
-                         [1, 1, 0, 1, 0]]])
+        mat = self.binary_sts
         pattern_hash = np.array([5,6])
         N = 3
         expected = np.array([ 1.62,  2.52])
-        n_exp = ue.n_exp_mat_sum_trial(mat, N,pattern_hash,method = 'analytic_TrialAverage')
+        n_exp = ue.n_exp_mat_sum_trial(mat, N, pattern_hash, method='analytic_TrialAverage')
         self.assertTrue(np.allclose(n_exp,expected))
+
+    def test_n_exp_mat_sum_trial_surrogate(self):
+        mat = self.binary_sts
+        pattern_hash = np.array([5])
+        N = 3
+        n_exp_anal = ue.n_exp_mat_sum_trial(mat, N, pattern_hash, method='analytic_TrialAverage')
+        n_exp_surr = ue.n_exp_mat_sum_trial(mat, N, pattern_hash, method='surrogate_TrialByTrial',n_surr = 1000)
+        self.assertLess((np.abs(n_exp_anal[0]-np.mean(n_exp_surr))/n_exp_anal[0]),0.1)
 
     def test_n_exp_mat_sum_trial_ValueError(self):
         mat = np.array([[0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0],
@@ -169,13 +257,7 @@ class UETestCase(unittest.TestCase):
         self.assertTrue(np.allclose(ue.jointJ(p_val),expected))
 
     def test__rate_mat_avg_trial_default(self):
-        mat = np.array([[[1, 1, 1, 1, 0],
-                         [0, 1, 1, 1, 0],
-                         [0, 1, 1, 0, 1]],
-
-                        [[1, 1, 1, 1, 1],
-                         [0, 1, 1, 1, 1],
-                         [1, 1, 0, 1, 0]]])
+        mat = self.binary_sts
         expected = [0.9, 0.7,0.6]
         self.assertTrue(np.allclose(expected,ue._rate_mat_avg_trial(mat)))
 
@@ -197,14 +279,8 @@ class UETestCase(unittest.TestCase):
                     winstep).rescale('ms').magnitude,
                 expected.rescale('ms').magnitude))
 
-    def test__UE(self):
-        mat = np.array([[[1, 1, 1, 1, 0],
-                         [0, 1, 1, 1, 0],
-                         [0, 1, 1, 0, 1]],
-
-                        [[1, 1, 1, 1, 1],
-                         [0, 1, 1, 1, 1],
-                         [1, 1, 0, 1, 0]]])
+    def test__UE_default(self):
+        mat = self.binary_sts
         pattern_hash = np.array([4,6])
         N = 3
         expected_S = np.array([-0.26226523,  0.04959301])
@@ -221,81 +297,55 @@ class UETestCase(unittest.TestCase):
             for item1_cnt,item1 in enumerate(item0):
                 self.assertTrue(np.allclose(expected_idx[item0_cnt][item1_cnt],item1))
 
-    def jointJ_window_analysis(self):
-        sts1 = [array([  26.,   48.,   78.,  144.,  178.]),
-            array([   4.,   45.,   85.,  123.,  156.,  185.]),
-            array([  22.,   53.,   73.,   88.,  120.,  147.,  167.,  193.]),
-            array([  23.,   49.,   74.,  116.,  142.,  166.,  189.]),
-            array([   5.,   34.,   54.,   80.,  108.,  128.,  150.,  181.]),
-            array([  18.,   61.,  107.,  170.]),
-            array([  62.,   98.,  131.,  161.]),
-            array([  37.,   63.,   86.,  131.,  168.]),
-            array([  39.,   76.,  100.,  127.,  153.,  198.]),
-            array([   3.,   35.,   60.,   88.,  108.,  141.,  171.,  184.]),
-            array([  39.,  170.]),
-            array([  25.,   68.,  170.]),
-            array([  19.,   57.,   84.,  116.,  157.,  192.]),
-            array([  17.,   80.,  131.,  172.]),
-            array([  33.,   65.,  124.,  162.,  192.]),
-            array([  58.,   87.,  185.]),
-            array([  19.,  101.,  174.]),
-            array([  84.,  118.,  156.,  198.,  199.]),
-            array([   5.,   55.,   67.,   96.,  114.,  148.,  172.,  199.]),
-            array([  61.,  105.,  131.,  169.,  195.]),
-            array([  26.,   96.,  129.,  157.]),
-            array([  41.,   85.,  157.,  199.]),
-            array([   6.,   30.,   53.,   76.,  109.,  142.,  167.,  194.]),
-            array([ 159.]),
-            array([   6.,   51.,   78.,  113.,  154.,  183.]),
-            array([ 138.]),
-            array([  23.,   59.,  154.,  185.]),
-            array([  12.,   14.,   52.,   54.,  109.,  145.,  192.]),
-            array([  29.,   61.,   84.,  122.,  145.,  168.]),
-            array([ 26.,  99.]),
-            array([   3.,   31.,   55.,   85.,  108.,  158.,  191.]),
-            array([   5.,   37.,   70.,  119.,  170.]),
-            array([  38.,   79.,  117.,  157.,  192.]),
-            array([ 174.]),
-            array([ 114.]),
-            array([], dtype=float64)]
-        sts2 = [array([   3.,  119.]),
-            array([  54.,  155.,  183.]),
-            array([  35.,  133.]),
-            array([  25.,  100.,  176.]),
-            array([  9.,  98.]),
-            array([   6.,   97.,  198.]),
-            array([   7.,   62.,  148.]),
-            array([ 100.,  158.]),
-            array([   7.,   62.,  122.,  179.,  191.]),
-            array([ 125.,  182.]),
-            array([  30.,   55.,  127.,  157.,  196.]),
-            array([  27.,   70.,  173.]),
-            array([  82.,   84.,  198.]),
-            array([  11.,   29.,  137.]),
-            array([   5.,   49.,   61.,  101.,  142.,  190.]),
-            array([  78.,  162.,  178.]),
-            array([  13.,   14.,  130.,  172.]),
-            array([ 22.]),
-            array([  16.,   55.,  109.,  113.,  175.]),
-            array([  17.,   33.,   63.,  102.,  144.,  189.,  190.]),
-            array([ 58.]),
-            array([  27.,   30.,   99.,  145.,  176.]),
-            array([  10.,   58.,  116.,  182.]),
-            array([  14.,   68.,  104.,  126.,  162.,  194.]),
-            array([  56.,  129.,  196.]),
-            array([  50.,   78.,  105.,  152.,  190.,  197.]),
-            array([  24.,   66.,  113.,  117.,  161.]),
-            array([   9.,   31.,   81.,   95.,  136.,  154.]),
-            array([  10.,  115.,  185.,  191.]),
-            array([  71.,  140.,  157.]),
-            array([  15.,   27.,   88.,  102.,  103.,  151.,  181.,  188.]),
-            array([  51.,   75.,   95.,  134.,  195.]),
-            array([  18.,   55.,   75.,  131.,  186.]),
-            array([  10.,   16.,   41.,   42.,   75.,  127.]),
-            array([  62.,   76.,  102.,  145.,  171.,  183.]),
-            array([  66.,   71.,   85.,  140.,  154.])]
+    def test__UE_surrogate(self):
+        mat = self.binary_sts
+        pattern_hash = np.array([4])
+        N = 3
+        _, rate_avg_surr, _, n_emp_surr,indices_surr =\
+        ue._UE(mat, N, pattern_hash, method='surrogate_TrialByTrial', n_surr=100)
+        _, rate_avg, _, n_emp,indices =\
+        ue._UE(mat, N, pattern_hash, method='analytic_TrialByTrial')
+        self.assertTrue(np.allclose(n_emp ,n_emp_surr))
+        self.assertTrue(np.allclose(rate_avg ,rate_avg_surr))
+        for item0_cnt,item0 in enumerate(indices):
+            for item1_cnt,item1 in enumerate(item0):
+                self.assertTrue(np.allclose(indices_surr[item0_cnt][item1_cnt],item1))
 
-
+    def test_jointJ_window_analysis(self):
+        sts1 = self.sts1_neo
+        sts2 = self.sts2_neo
+        data = np.vstack((sts1,sts2)).T
+        winsize = 100*pq.ms
+        binsize = 5*pq.ms
+        winstep = 20*pq.ms
+        pattern_hash = [3]
+        UE_dic = ue.jointJ_window_analysis(data, binsize, winsize, winstep, pattern_hash)
+        expected_Js = np.array(
+            [ 0.57953708,  0.47348757,  0.1729669 ,  
+              0.01883295, -0.21934742,-0.80608759])
+        expected_n_emp = np.array(
+            [ 9.,  9.,  7.,  7.,  6.,  6.])
+        expected_n_exp = np.array(
+            [ 6.5 ,  6.85,  6.05,  6.6 ,  6.45,  8.7 ])
+        expected_rate = np.array(
+            [[ 0.02166667,  0.01861111],
+             [ 0.02277778,  0.01777778],
+             [ 0.02111111,  0.01777778],
+             [ 0.02277778,  0.01888889],
+             [ 0.02305556,  0.01722222],
+             [ 0.02388889,  0.02055556]])*pq.kHz
+        expected_indecis_tril26 = [ 4.,    4.]
+        expected_indecis_tril4 = [ 1.]
+        self.assertTrue(np.allclose(UE_dic['Js'] ,expected_Js))
+        self.assertTrue(np.allclose(UE_dic['n_emp'] ,expected_n_emp))
+        self.assertTrue(np.allclose(UE_dic['n_exp'] ,expected_n_exp))
+        self.assertTrue(np.allclose(
+            UE_dic['rate_avg'].rescale('Hz').magnitude ,
+            expected_rate.rescale('Hz').magnitude))
+        self.assertTrue(np.allclose(
+            UE_dic['indices']['trial26'],expected_indecis_tril26))
+        self.assertTrue(np.allclose(
+            UE_dic['indices']['trial4'],expected_indecis_tril4))
 def suite():
     suite = unittest.makeSuite(UETestCase, 'test')
     return suite

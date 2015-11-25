@@ -183,7 +183,7 @@ def n_emp_mat(mat, N, pattern_hash, base=2):
     return N_emp, indices
 
 
-def n_emp_mat_sum_trial(mat, N, pattern_hash):
+def n_emp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic_TrialByTrial'):
     """
     Calculates empirical number of observed patterns summed across trials
 
@@ -198,6 +198,18 @@ def n_emp_mat_sum_trial(mat, N, pattern_hash):
             number of neurons
     pattern_hash: list of integers
             array of hash values, length: number of patterns
+    method: string
+            method with which the unitary events whould be computed
+            'analytic_TrialByTrial' -- > calculate the expectency
+            (analytically) on each trial, then sum over all trials.
+            'analytic_TrialAverage' -- > calculate the expectency
+            by averaging over trials.
+            (cf. Gruen et al. 2003)
+            'surrogate_TrialByTrial' -- > calculate the distribution 
+            of expected coincidences by spike time randomzation in 
+            each trial and sum over trials.
+            Default is 'analytic_trialByTrial'
+
 
 
     Returns:
@@ -252,7 +264,10 @@ def n_emp_mat_sum_trial(mat, N, pattern_hash):
         N_emp_tmp,indices_tmp = n_emp_mat(mat_tr,N, pattern_hash,base=2)
         idx_trials.append(indices_tmp)
         N_emp += N_emp_tmp
-    return N_emp, idx_trials
+    if method == 'analytic_TrialByTrial' or method == 'surrogate_TrialByTrial':
+        return N_emp, idx_trials
+    elif method == 'analytic_TrialAverage':
+        return N_emp/float(len(mat)), idx_trials
 
 
 def _sts_overlap(sts, t_start=None, t_stop=None):
@@ -302,7 +317,7 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
     -------
     n_surr: integer
             number of surrogate to be used
-            Default is 3000
+            Default is 100
 
     Raises:
     -------
@@ -360,19 +375,22 @@ def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
                np.multiply(1-m,np.tile(1-marg_prob,(1,nrep)))
         return np.prod(pmat,axis=0)*float(np.shape(mat)[1])
     if method == 'surr':
+        if len(pattern_hash)>1:
+                raise ValueError('surrogate method works only for one pattern!')            
         if 'n_surr' in kwargs:
             n_surr = kwargs['n_surr']
         else:
-            n_surr = 3000.
-        N_exp_array = np.zeros((n_surr,len(pattern_hash)))
+            n_surr = 100.
+        N_exp_array = np.zeros(n_surr)
         for rz_idx, rz in enumerate(np.arange(n_surr)):
             # shuffling all elements of zero-one matrix
-            [np.random.shuffle(i) for i in mat]
-            N_exp_array[rz_idx], _ = n_emp_mat(mat, N, pattern_hash)[0]
+            mat_surr = np.array(mat)
+            [np.random.shuffle(i) for i in mat_surr]
+            N_exp_array[rz_idx] = n_emp_mat(mat_surr, N, pattern_hash)[0][0]
         return N_exp_array
 
 
-def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
+def n_exp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic_TrialByTrial', **kwargs):
     """
     Calculates the expected joint probability
     for each spike pattern sum over trials
@@ -392,12 +410,13 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
             method with which the unitary events whould be computed
             'analytic_TrialByTrial' -- > calculate the expectency
             (analytically) on each trial, then sum over all trials.
-            ''analytic_TrialAverage' -- > calculate the expectency
+            'analytic_TrialAverage' -- > calculate the expectency
             by averaging over trials.
-            Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
-
-
+            'surrogate_TrialByTrial' -- > calculate the distribution 
+            of expected coincidences by spike time randomzation in 
+            each trial and sum over trials.
+            Default is 'analytic_trialByTrial'
     Returns:
     --------
     numpy.array:
@@ -432,14 +451,21 @@ def n_exp_mat_sum_trial(mat,N, pattern_hash, method = 'analytic_TrialByTrial'):
     elif method == 'analytic_TrialAverage':
         n_exp = n_exp_mat(
             np.mean(mat,0), N, pattern_hash, method='analytic')*np.shape(mat)[0]
+    elif method == 'surrogate_TrialByTrial':
+        if 'n_surr' in kwargs: 
+            n_surr = kwargs['n_surr']
+        else:
+            n_surr = 100.
+        n_exp = np.zeros(n_surr)
+        for mat_tr in mat:
+            n_exp += n_exp_mat(mat_tr, N, pattern_hash, method='surr', n_surr = n_surr)
     else:
         raise ValueError(
             "The method only works on the zero_one matrix at the moment")
-
     return n_exp
 
 
-def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial'):
+def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial',**kwargs):
     """
     computes the expected coincidences and a function to calculate
     p-value for given empirical coincidences
@@ -494,12 +520,23 @@ def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial'):
     >>> n_exp
         array([ 1.56,  2.56])
     """
+    if method == 'analytic_TrialByTrial' or method == 'analytic_TrialAverage':
+        n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash, method = method)
+        def pval(n_emp):
+            p = 1.- scipy.special.gammaincc(n_emp, n_exp)
+            return p
+    elif method ==  'surrogate_TrialByTrial':
+        if 'n_surr' in kwargs: 
+            n_surr = kwargs['n_surr'] 
+        n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash, method = method, n_surr = n_surr)
+        def pval(n_emp):
+            hist = np.bincount(np.int64(n_exp))
+            exp_dist = hist/float(np.sum(hist))
+            if len(n_emp)>1:
+                raise ValueError('in surrogate method the p_value can be calculated only for one pattern!')
+            return np.sum(exp_dist[n_emp[0]:])
 
-    n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash,method = method)
-    def pval_anal(n_emp):
-        p = 1.- scipy.special.gammaincc(n_emp, n_exp)
-        return p
-    return pval_anal, n_exp
+    return pval, n_exp
 
 
 
@@ -572,15 +609,21 @@ def _winpos(t_start, t_stop, winsize, winstep,position='left-edge'):
     return ts_winpos
 
 
-def _UE(mat, N, pattern_hash, method='analytic_TrialByTrial'):
+def _UE(mat, N, pattern_hash, method='analytic_TrialByTrial',**kwargs):
     """
     returns the default results of unitary events analysis
     (Surprise, empirical coincidences and index of where it happened
     in the given mat, n_exp and average rate of neurons)
     """
     rate_avg = _rate_mat_avg_trial(mat)
-    n_emp, indices = n_emp_mat_sum_trial(mat, N, pattern_hash)
-    dist_exp, n_exp = gen_pval_anal(mat, N, pattern_hash, method)
+    n_emp, indices = n_emp_mat_sum_trial(mat, N, pattern_hash, method)
+    if method == 'surrogate_TrialByTrial':
+        if 'n_surr' in kwargs: 
+            n_surr = kwargs['n_surr']
+        else: n_surr = 100
+        dist_exp, n_exp = gen_pval_anal(mat, N, pattern_hash, method, n_surr=n_surr)
+    elif method == 'analytic_TrialByTrial' or method == 'analytic_TrialAverage':
+        dist_exp, n_exp = gen_pval_anal(mat, N, pattern_hash, method)
     pval = dist_exp(n_emp)
     Js = jointJ(pval)
     return Js, rate_avg, n_exp, n_emp,indices
@@ -615,8 +658,11 @@ def jointJ_window_analysis(
             (analytically) on each trial, then sum over all trials.
             ''analytic_TrialAverage' -- > calculate the expectency
             by averaging over trials.
-            Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
+            'surrogate_TrialByTrial' -- > calculate the distribution 
+            of expected coincidences by spike time randomzation in 
+            each trial and sum over trials.
+            Default is 'analytic_trialByTrial'
 
     Returns:
     -------
