@@ -1,3 +1,23 @@
+
+"Unitary Event (UE) analysis is a statistical method that
+ enables to analyze in a time resolved manner excess spike correlation
+ between simultaneously recorded neurons by comparing the empirical
+ spike coincidences (precision of a few ms) to the expected number 
+ based on the firing rates of the neurons.
+
+References:
+-----------
+Gruen, Diesmann, Grammont, Riehle, Aertsen (1999) J Neurosci Methods, 94(1): 67-79.
+Gruen, Diesmann, Aertsen (2002a,b) Neural Comput, 14(1): 43-80; 81-19.
+Grün S, Riehle A, and Diesmann M (2003) Effect of cross-trial nonstationarity 
+on joint-spike events Biological Cybernetics 88(5):335-351. 
+Grün S (2009) Data-driven significance estimation of precise spike correlation. 
+J Neurophysiology 101:1126-1140 (invited review)"
+
+
+
+
+
 import numpy as np
 import quantities as pq
 import neo
