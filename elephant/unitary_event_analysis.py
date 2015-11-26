@@ -1,5 +1,6 @@
 
-"Unitary Event (UE) analysis is a statistical method that
+"""
+Unitary Event (UE) analysis is a statistical method that
  enables to analyze in a time resolved manner excess spike correlation
  between simultaneously recorded neurons by comparing the empirical
  spike coincidences (precision of a few ms) to the expected number 
@@ -9,10 +10,11 @@ References:
 -----------
 Gruen, Diesmann, Grammont, Riehle, Aertsen (1999) J Neurosci Methods, 94(1): 67-79.
 Gruen, Diesmann, Aertsen (2002a,b) Neural Comput, 14(1): 43-80; 81-19.
-Grün S, Riehle A, and Diesmann M (2003) Effect of cross-trial nonstationarity 
+Gruen S, Riehle A, and Diesmann M (2003) Effect of cross-trial nonstationarity 
 on joint-spike events Biological Cybernetics 88(5):335-351. 
-Grün S (2009) Data-driven significance estimation of precise spike correlation. 
-J Neurophysiology 101:1126-1140 (invited review)"
+Gruen S (2009) Data-driven significance estimation of precise spike correlation. 
+J Neurophysiology 101:1126-1140 (invited review)
+"""
 
 
 
@@ -203,7 +205,7 @@ def n_emp_mat(mat, N, pattern_hash, base=2):
     return N_emp, indices
 
 
-def n_emp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic_TrialByTrial'):
+def n_emp_mat_sum_trial(mat, N, pattern_hash, method='analytic_TrialByTrial'):
     """
     Calculates empirical number of observed patterns summed across trials
 
@@ -281,7 +283,7 @@ def n_emp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic_TrialByTrial'):
         # check if the mat is zero-one matrix
         if np.any(np.array(mat_tr)>1):
             raise ValueError("entries of mat should be either one or zero")
-        N_emp_tmp,indices_tmp = n_emp_mat(mat_tr,N, pattern_hash,base=2)
+        N_emp_tmp,indices_tmp = n_emp_mat(mat_tr, N, pattern_hash,base=2)
         idx_trials.append(indices_tmp)
         N_emp += N_emp_tmp
     if method == 'analytic_TrialByTrial' or method == 'surrogate_TrialByTrial':
@@ -316,7 +318,7 @@ def _sts_overlap(sts, t_start=None, t_stop=None):
     return sts_cut
 
 
-def n_exp_mat(mat, N,pattern_hash, method = 'analytic', **kwargs):
+def n_exp_mat(mat, N, pattern_hash, method = 'analytic', **kwargs):
     """
     Calculates the expected joint probability for each spike pattern
 
@@ -437,6 +439,13 @@ def n_exp_mat_sum_trial(mat, N, pattern_hash, method = 'analytic_TrialByTrial', 
             of expected coincidences by spike time randomzation in 
             each trial and sum over trials.
             Default is 'analytic_trialByTrial'
+
+    kwargs:
+    -------
+    n_surr: integer
+            number of surrogate to be used
+            Default is 100
+
     Returns:
     --------
     numpy.array:
@@ -515,6 +524,12 @@ def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial',**kwargs)
             Default is 'analytic_trialByTrial'
             (cf. Gruen et al. 2003)
 
+    kwargs:
+    -------
+    n_surr: integer
+            number of surrogate to be used
+            Default is 100
+
 
     Returns:
     --------
@@ -548,6 +563,8 @@ def gen_pval_anal(mat, N, pattern_hash, method='analytic_TrialByTrial',**kwargs)
     elif method ==  'surrogate_TrialByTrial':
         if 'n_surr' in kwargs: 
             n_surr = kwargs['n_surr'] 
+        else:
+            n_surr = 100.
         n_exp = n_exp_mat_sum_trial(mat, N, pattern_hash, method = method, n_surr = n_surr)
         def pval(n_emp):
             hist = np.bincount(np.int64(n_exp))
@@ -652,7 +669,7 @@ def _UE(mat, N, pattern_hash, method='analytic_TrialByTrial',**kwargs):
 def jointJ_window_analysis(
         data, binsize, winsize, winstep, pattern_hash,
         method='analytic_TrialByTrial', t_start=None,
-        t_stop=None, binary=True, **args):
+        t_stop=None, binary=True, **kwargs):
     """
     Calculates the joint surprise in a sliding window fashion
 
@@ -683,6 +700,13 @@ def jointJ_window_analysis(
             of expected coincidences by spike time randomzation in 
             each trial and sum over trials.
             Default is 'analytic_trialByTrial'
+
+    kwargs:
+    -------
+    n_surr: integer
+            number of surrogate to be used
+            Default is 100
+
 
     Returns:
     -------
@@ -755,7 +779,13 @@ def jointJ_window_analysis(
 
     for i, win_pos in enumerate(t_winpos_bintime):
         mat_win = mat_tr_unit_spt[:,:,win_pos:win_pos + winsize_bintime]
-        Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
+        if method == 'surrogate_TrialByTrial':
+            if 'n_surr' in kwargs: 
+                n_surr = kwargs['n_surr']
+            else: n_surr = 100
+            Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method,n_surr=n_surr)
+        else:
+            Js_win[i], rate_avg[i], n_exp_win[i], n_emp_win[i], indices_lst = _UE(mat_win, N,pattern_hash,method)
         for j in range(num_tr):
             if len(indices_lst[j][0]) > 0:
                 indices_win['trial'+str(j)] = np.append(indices_win['trial'+str(j)], indices_lst[j][0] + win_pos)
