@@ -28,23 +28,24 @@ import elephant.conversion as conv
 import scipy
 
 
-def hash_from_pattern(m, N, base=2):
+
+def hash_from_pattern(m, N=None, base=2):
     """
     Calculate for a spike pattern or a matrix of spike patterns
     (provide each pattern as a column) composed of N neurons a
     unique number.
 
-
     Parameters:
     -----------
-    m: list of integers
-           matrix of 0-1 patterns as columns,
+    m: 2d numpy array
+           spike patterns represented as a binary matrix 
+           (i.e., matrix of 0's and 1's). 
            shape: (number of neurons, number of patterns)
     N: integer
            number of neurons is required to be equal to the number
            of rows
     base: integer
-           base for calculation of the number from binary
+           base for calculation of hash values from binary
            sequences (= pattern).
            Default is 2
 
@@ -57,6 +58,7 @@ def hash_from_pattern(m, N, base=2):
     Raises:
     -------
        ValueError: if matrix m has wrong orientation
+       ValueError: if the patterns entries are not zero or one
 
     Examples:
     ---------
@@ -78,10 +80,12 @@ def hash_from_pattern(m, N, base=2):
         array([0, 4, 2, 1, 6, 5, 3, 7])
     """
     # check the consistency between shape of m and number neurons N
-    if N != np.shape(m)[0]:
+    if N !=None and N != np.shape(m)[0]:
         raise ValueError('patterns in the matrix should be column entries')
-
-    # generate the representation for binary system
+    # check zero one entries of patterns
+    if not np.all((m == 1) + (m == 0)):
+        raise ValueError('the patterns entries should be zero or one')
+    # generate the representation
     v = np.array([base**x for x in range(N)])
     # reverse the order
     v = v[np.argsort(-v)]
@@ -129,8 +133,9 @@ def inverse_hash_from_pattern(h, N, base=2):
                [0, 0]])
     """
 
-    # check if the hash values are not bigger than possible hash value
-    # for N neuron with basis = base
+    # check if the hash values are not greater than the greatest possible
+    # value for N neurons with the given base
+
     if np.any(h > np.sum([base**x for x in range(N)])):
         raise ValueError(
             "hash value is not compatible with the number of neurons N")
