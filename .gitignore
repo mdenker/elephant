@@ -70,3 +70,5 @@ Thumbs.db
 
 # Things specific to this project #
 ###################################
+# Compiles MEX files by matlab
+*.mexa64
