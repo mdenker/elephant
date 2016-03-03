@@ -371,7 +371,8 @@ def _mother_proc_cpp_stat(A, t_stop, r, t_start=0 * ms):
     N = len(A) - 1
     exp_A = np.dot(A, range(N + 1))  # expected value of a
     exp_mother = (N * r) / float(exp_A)  # rate of the mother process
-    return _n_poisson(rate=exp_mother, t_stop=t_stop, t_start=t_start)[0]
+    return homogeneous_poisson_process(
+        rate=exp_mother, t_stop=t_stop, t_start=t_start)
 
 
 def _cpp_hom_stat(A, t_stop, r, t_start=0 * ms):
@@ -537,9 +538,9 @@ def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
         raise ValueError(
             'A must be a probability vector, all the elements of must be >0')
     if rate.ndim == 0:
-        cpp = _cpp_hom_stat(A=A, T=t_stop, r=rate, start=t_start)
+        cpp = _cpp_hom_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
     else:
-        cpp = _cpp_het_stat(A=A, T=t_stop, r=rate, start=t_start)
+        cpp = _cpp_het_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
     if jitter is None:
         return cpp
     else:

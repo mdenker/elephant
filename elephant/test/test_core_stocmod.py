@@ -235,7 +235,7 @@ class StocModelsTestCase(unittest.TestCase):
         self.assertRaises(
             ValueError, sm.sip_nonstat, N=self.N, rate=self.rate_profile,
             rate_c=self.rate_profile + 1*pq.Hz)
-'''
+
     def test_genproc_msip_poisson(self):
 
         # Define parameters for mSIP simulation
