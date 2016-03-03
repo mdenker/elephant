@@ -175,67 +175,6 @@ def homogeneous_gamma_process(a, b, t_start=0.0 * ms, t_stop=1000.0 * ms, as_arr
     k, theta = a, (1 / b)
     return _homogeneous_process(np.random.gamma, (k, theta), rate, t_start, t_stop, as_array)
 
-def _n_poisson(rate, t_stop, t_start=0.0 * ms, n=1):
-    """
-    Generates one or more independent Poisson spike trains.
-    Parameters
-    ----------
-    rate : Quantity or Quantity array
-        Expected firing rate (frequency) of each output SpikeTrain.
-        Can be one of:
-        *  a single Quantity value: expected firing rate of each output
-           SpikeTrain
-        *  a Quantity array: rate[i] is the expected firing rate of the i-th
-           output SpikeTrain
-    t_stop : Quantity
-        Single common stop time of each output SpikeTrain. Must be > t_start.
-    t_start : Quantity (optional)
-        Single common start time of each output SpikeTrain. Must be < t_stop.
-        Default: 0 s.
-    n: int (optional)
-        If rate is a single Quantity value, n specifies the number of
-        SpikeTrains to be generated. If rate is an array, n is ignored and the
-        number of SpikeTrains is equal to len(rate).
-        Default: 1
-    Returns
-    -------
-    list of neo.SpikeTrain
-        Each SpikeTrain contains one of the independent Poisson spike trains,
-        either n SpikeTrains of the same rate, or len(rate) SpikeTrains with
-        varying rates according to the rate parameter. The time unit of the
-        SpikeTrains is given by t_stop.
-    """
-    # Check that the provided input is Hertz of return error
-    try:
-        for r in rate.reshape(-1, 1):
-            r.rescale('Hz')
-    except AttributeError:
-        raise ValueError('rate argument must have rate unit (1/time)')
-
-    # Check t_start < t_stop and create their strip dimensions
-    if not t_start < t_stop:
-        raise ValueError(
-            't_start (=%s) must be < t_stop (=%s)' % (t_start, t_stop))
-
-    # Set number n of output spike trains (specified or set to len(rate))
-    if not (type(n) == int and n > 0):
-        raise ValueError('n (=%s) must be a positive integer' % str(n))
-    rate_dl = rate.simplified.magnitude.flatten()
-
-    # Check rate input parameter
-    if len(rate_dl) == 1:
-        if rate_dl < 0:
-            raise ValueError('rate (=%s) must be non-negative.' % rate)
-        rates = np.array([rate_dl] * n)
-    else:
-        rates = rate_dl.flatten()
-        if any(rates < 0):
-            raise ValueError('rate must have non-negative elements.')
-    sts = []
-    for r in rates:
-        sts.append(homogeneous_poisson_process(r*Hz, t_start, t_stop))
-    return sts
-
 
 def _pool_two_spiketrains(a, b, range='inner'):
     """
@@ -478,7 +417,8 @@ def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
     CPP = _cpp_hom_stat(a, t_stop, r_min, t_start)
 
     # Generate the independent heterogeneous Poisson processes
-    POISS = [_n_poisson(i - r_min, t_stop, t_start)[0] for i in r]
+    POISS = [
+        homogeneous_poisson_process(i - r_min, t_stop, t_start) for i in r]
 
     # Pool the correlated CPP and the corresponding Poisson processes
     out = [_pool_two_spiketrains(CPP[i], POISS[i]) for i in range(N)]
