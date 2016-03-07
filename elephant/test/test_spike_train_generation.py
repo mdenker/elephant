@@ -215,7 +215,7 @@ class cppTestCase(unittest.TestCase):
         rate = 3 * Hz
         cpp_hom_eq = stgen.cpp(A, t_stop, rate, t_start=t_start)
 
-        self.assertTrue(np.allclose(cpp_hom_eq[0], cpp_hom_eq[1]))
+        self.assertTrue(np.allclose(cpp_hom_eq[0].magnitude, cpp_hom_eq[1].magnitude))
 
     def test_cpp_hom_errors(self):
         # testing raises of ValueError (wrong inputs)
@@ -316,7 +316,8 @@ class cppTestCase(unittest.TestCase):
         rate = [3, 3] * Hz
         cpp_het_eq = stgen.cpp(A, t_stop, rate, t_start=t_start)
 
-        self.assertTrue(np.allclose(cpp_het_eq[0], cpp_het_eq[1]))
+        self.assertTrue(np.allclose(
+            cpp_het_eq[0].magnitude, cpp_het_eq[1].magnitude))
 
     def test_cpp_het_err(self):
     # testing raises of ValueError (wrong inputs)
@@ -336,7 +337,7 @@ class cppTestCase(unittest.TestCase):
             t_start=15*1000 * ms)
         # testing t_start=t_stop
         self.assertRaises(
-            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[3, 4]*Hz,
+            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[3, 5]*Hz,
             t_start=10*1000 * ms)
         # testing negative rate
         self.assertRaises(

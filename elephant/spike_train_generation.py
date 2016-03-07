@@ -176,7 +176,7 @@ def homogeneous_gamma_process(a, b, t_start=0.0 * ms, t_stop=1000.0 * ms, as_arr
     return _homogeneous_process(np.random.gamma, (k, theta), rate, t_start, t_stop, as_array)
 
 
-def _pool_two_spiketrains(a, b, range='inner'):
+def _pool_two_spiketrains(a, b, extremes='inner'):
     """
     Pool the spikes of two spike trains a and b into a unique spike train.
 
@@ -185,18 +185,18 @@ def _pool_two_spiketrains(a, b, range='inner'):
     a, b : neo.SpikeTrains
         Spike trains to be pooled
 
-    range: str, optional
-        Only spikes of a and b in the specified range are considered.
-        * 'inner': pool all spikes from min(a.tstart_ b.t_start) to
-           max(a.t_stop, b.t_stop)
-        * 'outer': pool all spikes from max(a.tstart_ b.t_start) to
+    extremes: str, optional
+        Only spikes of a and b in the specified extremes are considered.
+        * 'inner': pool all spikes from max(a.tstart_ b.t_start) to
            min(a.t_stop, b.t_stop)
+        * 'outer': pool all spikes from min(a.tstart_ b.t_start) to
+           max(a.t_stop, b.t_stop)
         Default: 'inner'
 
     Output
     ------
     neo.SpikeTrain containing all spikes in a and b falling in the
-    specified range
+    specified extremes
     """
 
     unit = a.units
@@ -204,22 +204,25 @@ def _pool_two_spiketrains(a, b, range='inner'):
     times_b_dimless = list(b.rescale(unit).view(Quantity).magnitude)
     times = (times_a_dimless + times_b_dimless) * unit
 
-    if range == 'outer':
+    if extremes == 'outer':
         t_start = min(a.t_start, b.t_start)
-        stop = max(a.t_stop, b.t_stop)
-        times = times[times > t_start]
-        times = times[times < stop]
-    elif range == 'inner':
+        t_stop = max(a.t_stop, b.t_stop)
+    elif extremes == 'inner':
         t_start = max(a.t_start, b.t_start)
-        stop = min(a.t_stop, b.t_stop)
+        t_stop = min(a.t_stop, b.t_stop)
+        times = times[times > t_start]
+        times = times[times < t_stop]
+
     else:
-        raise ValueError('range (%s) can only be "inner" or "outer"' % range)
+        raise ValueError(
+            'extremes (%s) can only be "inner" or "outer"' % extremes)
     pooled_train = SpikeTrain(
-        times=sorted(times.magnitude), units=unit, t_start=t_start, t_stop=stop)
+        times=sorted(times.magnitude), units=unit, t_start=t_start,
+        t_stop=t_stop)
     return pooled_train
 
 
-def _pool_spiketrains(trains, range='inner'):
+def _pool_spiketrains(trains, extremes='inner'):
     """
     Pool spikes from any number of spike trains into a unique spike train.
 
@@ -228,8 +231,8 @@ def _pool_spiketrains(trains, range='inner'):
     trains [list]
         list of spike trains to merge
 
-    range: str, optional
-        Only spikes of a and b in the specified range are considered.
+    extremes: str, optional
+        Only spikes of a and b in the specified extremes are considered.
         * 'inner': pool all spikes from min(a.t_start b.t_start) to
            max(a.t_stop, b.t_stop)
         * 'outer': pool all spikes from max(a.tstart_ b.t_start) to
@@ -239,17 +242,18 @@ def _pool_spiketrains(trains, range='inner'):
     Output
     ------
     neo.SpikeTrain containing all spikes in trains falling in the
-    specified range
+    specified extremes
     """
 
     merge_trains = trains[0]
     for t in trains[1:]:
-        merge_trains = _pool_two_spiketrains(merge_trains, t, range=range)
-    t_start, stop = merge_trains.t_start, merge_trains.t_stop
+        merge_trains = _pool_two_spiketrains(
+            merge_trains, t, extremes=extremes)
+    t_start, t_stop = merge_trains.t_start, merge_trains.t_stop
     merge_trains = sorted(merge_trains)
     merge_trains = np.squeeze(merge_trains)
     merge_trains = SpikeTrain(
-        merge_trains, t_stop=stop, t_start=t_start, units=trains[0].units)
+        merge_trains, t_stop=t_stop, t_start=t_start, units=trains[0].units)
     return merge_trains
 
 
@@ -306,7 +310,6 @@ def _mother_proc_cpp_stat(A, t_stop, r, t_start=0 * ms):
     ------
     Poisson spike train representing the mother process generating the CPP
     """
-
     N = len(A) - 1
     exp_A = np.dot(A, range(N + 1))  # expected value of a
     exp_mother = (N * r) / float(exp_A)  # rate of the mother process
@@ -418,7 +421,7 @@ def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
 
     # Generate the independent heterogeneous Poisson processes
     POISS = [
-        homogeneous_poisson_process(i - r_min, t_stop, t_start) for i in r]
+        homogeneous_poisson_process(i - r_min, t_start, t_stop) for i in r]
 
     # Pool the correlated CPP and the corresponding Poisson processes
     out = [_pool_two_spiketrains(CPP[i], POISS[i]) for i in range(N)]
@@ -477,14 +480,19 @@ def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
     if any([a < 0 for a in A]):
         raise ValueError(
             'A must be a probability vector, all the elements of must be >0')
-    if rate.ndim == 0:
-        cpp = _cpp_hom_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
+    if A[0] == 1 or np.sum(rate.magnitude) == 0:
+        return [
+            SpikeTrain([]*t_stop.units, t_stop=t_stop,
+                       t_start=t_start) for i in range(len(A)-1)]
     else:
-        cpp = _cpp_het_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
-    if jitter is None:
-        return cpp
-    else:
-        cpp = [
-            dither_spike_train(cp, shift=jitter, edges=True)[0]
-            for cp in cpp]
-        return cpp
+        if rate.ndim == 0:
+            cpp = _cpp_hom_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
+        else:
+            cpp = _cpp_het_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
+        if jitter is None:
+            return cpp
+        else:
+            cpp = [
+                dither_spike_train(cp, shift=jitter, edges=True)[0]
+                for cp in cpp]
+            return cpp
