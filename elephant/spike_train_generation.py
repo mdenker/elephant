@@ -228,7 +228,7 @@ def _pool_spiketrains(trains, extremes='inner'):
 
     Parameters
     ----------
-    trains [list]
+    trains: list
         list of spike trains to merge
 
     extremes: str, optional
@@ -266,11 +266,11 @@ def _sample_int_from_pdf(a, n):
 
     Parameters
     -----
-    a [array|list]
+    a: numpy.array
         Probability vector (i..e array of sum 1) that at each entry j carries
         the probability to sample j (j=0,1,...,len(a)-1).
 
-    n [int]
+    n: int
         Number of samples generated with the function
 
     Output
@@ -278,14 +278,13 @@ def _sample_int_from_pdf(a, n):
     array of n samples taking values between 0 and n=len(a)-1.
     """
 
-    # a = np.array(a)
     A = np.cumsum(a)  # cumulative distribution of a
     u = np.random.uniform(0, 1, size=n)
     U = np.array([u for i in a]).T  # copy u (as column vector) len(a) times
     return (A < U).sum(axis=1)
 
 
-def _mother_proc_cpp_stat(A, t_stop, r, t_start=0 * ms):
+def _mother_proc_cpp_stat(A, t_stop, rate, t_start=0 * ms):
     """
     Generate the hidden ("mother") Poisson process for a Compound Poisson
     Process (CPP).
@@ -293,18 +292,18 @@ def _mother_proc_cpp_stat(A, t_stop, r, t_start=0 * ms):
 
     Parameters
     ----------
-    r : Quantity, Hz
-        Homogeneous rate of the n spike trains that will be genereted by the
-        CPP function
-    A : array
+    A : numpy.array
         Amplitude distribution. A[j] represents the probability of a
         synchronous event of size j.
         The sum over all entries of a must be equal to one.
-    t_stop : Quantity (time)
+    t_stop : quantities.Quantity
         The stopping time of the mother process
-    t_start : Quantity (time). Optional, default is 0 ms
+    rate : quantities.Quantity
+        Homogeneous rate of the n spike trains that will be genereted by the
+        CPP function
+    t_start : quantities.Quantity, optional
         The starting time of the mother process
-
+        Default: 0 ms
 
     Output
     ------
@@ -312,28 +311,29 @@ def _mother_proc_cpp_stat(A, t_stop, r, t_start=0 * ms):
     """
     N = len(A) - 1
     exp_A = np.dot(A, range(N + 1))  # expected value of a
-    exp_mother = (N * r) / float(exp_A)  # rate of the mother process
+    exp_mother = (N * rate) / float(exp_A)  # rate of the mother process
     return homogeneous_poisson_process(
         rate=exp_mother, t_stop=t_stop, t_start=t_start)
 
 
-def _cpp_hom_stat(A, t_stop, r, t_start=0 * ms):
+def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
     """
     Generate a Compound Poisson Process (CPP) with amplitude distribution
     A and heterogeneous firing rates r=r[0], r[1], ..., r[-1].
 
     Parameters
     ----------
-    A : array
+    A : numpy.ndarray
         Amplitude distribution. A[j] represents the probability of a
         synchronous event of size j.
         The sum over all entries of A must be equal to one.
-    t_stop : Quantity (time)
+    t_stop : quantities.Quantity
         The end time of the output spike trains
-    r : Quantity (1/time)
+    rate : quantities.Quantity
         Average rate of each spike train generated
-    t_start : Quantity (time). Optional, default to 0 s
+    t_start : quantities.Quantity, optional
         The start time of the output spike trains
+        Default: 0 ms
 
     Output
     ------
@@ -342,7 +342,8 @@ def _cpp_hom_stat(A, t_stop, r, t_start=0 * ms):
     """
 
     # Generate mother process and associated spike labels
-    mother = _mother_proc_cpp_stat(A=A, t_stop=t_stop, r=r, t_start=t_start)
+    mother = _mother_proc_cpp_stat(
+        A=A, t_stop=t_stop, rate=rate, t_start=t_start)
     labels = _sample_int_from_pdf(A, len(mother))
 
     N = len(A) - 1  # Number of trains in output
@@ -376,7 +377,7 @@ def _cpp_hom_stat(A, t_stop, r, t_start=0 * ms):
     return trains
 
 
-def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
+def _cpp_het_stat(A, t_stop, rate, t_start=0.*ms):
     """
     Generate a Compound Poisson Process (CPP) with amplitude distribution
     A and heterogeneous firing rates r=r[0], r[1], ..., r[-1].
@@ -389,10 +390,11 @@ def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
         The sum over all entries of A must be equal to one.
     t_stop : Quantity (time)
         The end time of the output spike trains
-    r : Quantity (1/time)
+    rate : Quantity (1/time)
         Average rate of each spike train generated
-    t_start : Quantity (time). Optional, default to 0 s
+    t_start : quantities.Quantity, optional
         The start time of the output spike trains
+        Default: 0 ms
 
     Output
     ------
@@ -402,10 +404,10 @@ def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
 
     # Computation of Parameters of the two CPPs that will be merged
     # (uncorrelated with heterog. rates + correlated with homog. rates)
-    N = len(r)  # number of output spike trains
+    N = len(rate)  # number of output spike trains
     A_exp = np.dot(A, xrange(N + 1))  # expectation of A
-    r_sum = np.sum(r)  # sum of all output firing rates
-    r_min = np.min(r)  # minimum of the firing rates
+    r_sum = np.sum(rate)  # sum of all output firing rates
+    r_min = np.min(rate)  # minimum of the firing rates
     r1 = r_sum - N * r_min  # rate of the uncorrelated CPP
     r2 = r_sum / float(A_exp) - r1  # rate of the correlated CPP
     r_mother = r1 + r2  # rate of the hidden mother process
@@ -421,16 +423,16 @@ def _cpp_het_stat(A, t_stop, r, t_start=0.*ms):
 
     # Generate the independent heterogeneous Poisson processes
     POISS = [
-        homogeneous_poisson_process(i - r_min, t_start, t_stop) for i in r]
+        homogeneous_poisson_process(i - r_min, t_start, t_stop) for i in rate]
 
     # Pool the correlated CPP and the corresponding Poisson processes
     out = [_pool_two_spiketrains(CPP[i], POISS[i]) for i in range(N)]
     return out
 
 
-def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
+def compound_poisson_process(rate, A, t_stop, jitter=None, t_start=0 * ms):
     """
-    Generate a Compound Poisson Process (CPP) with a given amplitude
+    Generate a Compound Poisson Process (CPP; see [1]) with a given amplitude
     distribution A and stationary marginal rates r.
 
     The CPP process is a model for parallel, correlated processes with Poisson
@@ -449,34 +451,39 @@ def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
 
     Parameters
     ----------
+    rate : quantities.Quantity
+        Average rate of each spike train generated. Can be:
+        * a single value, all spike trains will have same rate rate
+        * an array of values (of length len(A)-1), each indicating the
+          firing rate of one process in output
     A : array
         CPP's amplitude distribution. A[j] represents the probability of
         a synchronous event of size j among the generated spike trains.
         The sum over all entries of A must be equal to one.
-    t_stop : Quantity (time)
-        The end time of the output spike trains
-    rate : Quantity (1/time)
-        Average rate of each spike train generated. Can be:
-        * single-valued: if so, all spike trains will have same rate rate
-        * a sequence of values (of length len(A)-1), each indicating the
-          firing rate of one process in output
-    t_start : Quantity (time). Optional, default to 0 s
-        The t_start time of the output spike trains
-    jitter : None or Quantity
-        If None the corelations are perfectly synchronous, in the case jitter
-        is a quantity object all the spike trains are shifted of a random in
+    t_stop : quantities.Quantity
+        The end time of the output spike trains.
+    jitter : None or quantities.Quantity, optional
+        If None, the injected synchrony is exact. If jitter is a Quantity, all
+        the spike trains are shifted independently by a random amount in
         the interval [-jitter, +jitter].
         Default: None
+    t_start : quantities.Quantity, optional
+        The t_start time of the output spike trains.
+        Default: 0 s
 
     Returns
     -------
-    List of SpikeTrain
+    List of neo.SpikeTrains
         SpikeTrains with specified firing rates forming the CPP with amplitude
         distribution A.
+
+    References
+    ----------
+    [1] Staude, Rotter, Gruen (2010) J Comput Neurosci 29:327-350.
     """
     if abs(sum(A)-1) > np.finfo('float').eps:
         raise ValueError(
-            'A must be a probability vector, sum(A)= %i !=1' % int(sum(A)))
+            'A must be a probability vector, sum(A)= %f !=1' % (sum(A)))
     if any([a < 0 for a in A]):
         raise ValueError(
             'A must be a probability vector, all the elements of must be >0')
@@ -486,9 +493,9 @@ def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
                        t_start=t_start) for i in range(len(A)-1)]
     else:
         if rate.ndim == 0:
-            cpp = _cpp_hom_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
+            cpp = _cpp_hom_stat(A=A, t_stop=t_stop, rate=rate, t_start=t_start)
         else:
-            cpp = _cpp_het_stat(A=A, t_stop=t_stop, r=rate, t_start=t_start)
+            cpp = _cpp_het_stat(A=A, t_stop=t_stop, rate=rate, t_start=t_start)
         if jitter is None:
             return cpp
         else:
@@ -496,3 +503,4 @@ def cpp(A, t_stop, rate, t_start=0 * ms, jitter=None):
                 dither_spike_train(cp, shift=jitter, edges=True)[0]
                 for cp in cpp]
             return cpp
+cpp = compound_poisson_process
