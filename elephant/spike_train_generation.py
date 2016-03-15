@@ -354,7 +354,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
         # for each spike, take its label l
         for spike_id, l in enumerate(labels):
             # choose l random trains
-            train_ids = random.sample(xrange(N), l)
+            train_ids = random.sample(range(N), l)
             # and set the spike matrix for that train
             for train_id in train_ids:
                 spike_matrix[train_id, spike_id] = True  # and spike to True
@@ -367,7 +367,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
         print 'memory case'
         times = [[] for i in range(N)]
         for t, l in zip(mother, labels):
-            train_ids = random.sample(xrange(N), l)
+            train_ids = random.sample(range(N), l)
             for train_id in train_ids:
                 times[train_id].append(t)
 
@@ -405,7 +405,7 @@ def _cpp_het_stat(A, t_stop, rate, t_start=0.*ms):
     # Computation of Parameters of the two CPPs that will be merged
     # (uncorrelated with heterog. rates + correlated with homog. rates)
     N = len(rate)  # number of output spike trains
-    A_exp = np.dot(A, xrange(N + 1))  # expectation of A
+    A_exp = np.dot(A, range(N + 1))  # expectation of A
     r_sum = np.sum(rate)  # sum of all output firing rates
     r_min = np.min(rate)  # minimum of the firing rates
     r1 = r_sum - N * r_min  # rate of the uncorrelated CPP
@@ -430,7 +430,7 @@ def _cpp_het_stat(A, t_stop, rate, t_start=0.*ms):
     return out
 
 
-def compound_poisson_process(rate, A, t_stop, jitter=None, t_start=0 * ms):
+def compound_poisson_process(rate, A, t_stop, shift=None, t_start=0 * ms):
     """
     Generate a Compound Poisson Process (CPP; see [1]) with a given amplitude
     distribution A and stationary marginal rates r.
@@ -462,10 +462,10 @@ def compound_poisson_process(rate, A, t_stop, jitter=None, t_start=0 * ms):
         The sum over all entries of A must be equal to one.
     t_stop : quantities.Quantity
         The end time of the output spike trains.
-    jitter : None or quantities.Quantity, optional
-        If None, the injected synchrony is exact. If jitter is a Quantity, all
+    shift : None or quantities.Quantity, optional
+        If None, the injected synchrony is exact. If shift is a Quantity, all
         the spike trains are shifted independently by a random amount in
-        the interval [-jitter, +jitter].
+        the interval [-shift, +shift].
         Default: None
     t_start : quantities.Quantity, optional
         The t_start time of the output spike trains.
@@ -481,26 +481,37 @@ def compound_poisson_process(rate, A, t_stop, jitter=None, t_start=0 * ms):
     ----------
     [1] Staude, Rotter, Gruen (2010) J Comput Neurosci 29:327-350.
     """
+    # Check A is a probability distribution (it sums to 1 and is positive)
     if abs(sum(A)-1) > np.finfo('float').eps:
         raise ValueError(
             'A must be a probability vector, sum(A)= %f !=1' % (sum(A)))
     if any([a < 0 for a in A]):
         raise ValueError(
             'A must be a probability vector, all the elements of must be >0')
-    if A[0] == 1 or np.sum(rate.magnitude) == 0:
+    # Check that the rate is not an empty Quantity
+    if rate.ndim == 1 and len(rate.magnitude) == 0:
+        raise ValueError('Rate is an empty Quantity array')
+    # Return empty spike trains for specific parameters
+    elif A[0] == 1 or np.sum(np.abs(rate.magnitude)) == 0:
         return [
             SpikeTrain([]*t_stop.units, t_stop=t_stop,
                        t_start=t_start) for i in range(len(A)-1)]
     else:
+        # Homogeneous rates
         if rate.ndim == 0:
             cpp = _cpp_hom_stat(A=A, t_stop=t_stop, rate=rate, t_start=t_start)
+        # Heterogeneous rates
         else:
             cpp = _cpp_het_stat(A=A, t_stop=t_stop, rate=rate, t_start=t_start)
-        if jitter is None:
+
+        if shift is None:
             return cpp
+        # Dither the output spiketrains
         else:
             cpp = [
-                dither_spike_train(cp, shift=jitter, edges=True)[0]
+                dither_spike_train(cp, shift=shift, edges=True)[0]
                 for cp in cpp]
             return cpp
+
+# Alias for the compound poisson process
 cpp = compound_poisson_process

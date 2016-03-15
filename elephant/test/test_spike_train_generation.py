@@ -229,21 +229,16 @@ class cppTestCase(unittest.TestCase):
             ValueError, stgen.cpp, A=[1, 1, 1], t_stop=10*1000 * ms, rate=3*Hz)
         # testing negative value in the amplitude
         self.assertRaises(
-            ValueError, stgen.cpp, A=[-1, 1, 1], t_stop=10*1000 * ms, rate=3*Hz)
-#        # testing t_start>t_stop
-#        self.assertRaises(
-#            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=3*Hz,
-#            t_start=15*1000 * ms)
-#        # testing t_start=t_stop
-#        self.assertRaises(
-#           AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=3*Hz,
-#            t_start=10*1000 * ms)
+            ValueError, stgen.cpp, A=[-1, 1, 1], t_stop=10*1000 * ms,
+            rate=3*Hz)
         # test negative rate
         self.assertRaises(
-            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=-3*Hz)
+            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms,
+            rate=-3*Hz)
         # test wrong unit for rate
         self.assertRaises(
-            ValueError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=3*1000 * ms)
+            ValueError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms,
+            rate=3*1000 * ms)
 
         # testing raises of AttributeError (missing input units)
         # Testing missing unit to t_stop
@@ -255,7 +250,8 @@ class cppTestCase(unittest.TestCase):
             t_start=3)
         # testing rate missing unit
         self.assertRaises(
-            AttributeError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=3)
+            AttributeError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms,
+            rate=3)
 
     def test_cpp_het(self):
         # testing output with generic inputs
@@ -321,32 +317,25 @@ class cppTestCase(unittest.TestCase):
             cpp_het_eq[0].magnitude, cpp_het_eq[1].magnitude))
 
     def test_cpp_het_err(self):
-    # testing raises of ValueError (wrong inputs)
+        # testing raises of ValueError (wrong inputs)
         # testing empty amplitude
         self.assertRaises(
             ValueError, stgen.cpp, A=[], t_stop=10*1000 * ms, rate=[3, 4]*Hz)
         # testing sum amplitude>1
         self.assertRaises(
-            ValueError, stgen.cpp, A=[1, 1, 1], t_stop=10*1000 * ms, rate=[3, 4]*Hz)
+            ValueError, stgen.cpp, A=[1, 1, 1], t_stop=10*1000 * ms,
+            rate=[3, 4]*Hz)
         # testing amplitude negative value
         self.assertRaises(
             ValueError, stgen.cpp, A=[-1, 1, 1], t_stop=10*1000 * ms,
             rate=[3, 4]*Hz)
-#        # testing t_start>t_stop
-#        self.assertRaises(
-#            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[3, 4]*Hz,
-#            t_start=15*1000 * ms)
-#        # testing t_start=t_stop
-#        self.assertRaises(
-#            AssertionError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[3, 5]*Hz,
-#            t_start=10*1000 * ms)
         # testing negative rate
         self.assertRaises(
             ValueError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms,
             rate=[-3, 4]*Hz)
         # testing empty rate
-#        self.assertRaises(
-#            TypeError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[]*Hz)
+        self.assertRaises(
+            ValueError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms, rate=[]*Hz)
         # testing empty amplitude
         self.assertRaises(
             ValueError, stgen.cpp, A=[], t_stop=10*1000 * ms, rate=[3, 4]*Hz)
@@ -355,7 +344,8 @@ class cppTestCase(unittest.TestCase):
             ValueError, stgen.cpp, A=[0, 1], t_stop=10*1000 * ms, rate=[3, 4]*Hz)
         # testing rate with different unit from Hz
         self.assertRaises(
-            ValueError, stgen.cpp, A=[0, 1], t_stop=10*1000 * ms, rate=[3, 4]*1000 * ms)
+            ValueError, stgen.cpp, A=[0, 1], t_stop=10*1000 * ms,
+            rate=[3, 4]*1000 * ms)
         # Testing analytical constrain between amplitude and rate
         self.assertRaises(
             ValueError, stgen.cpp, A=[0, 0, 1], t_stop=10*1000 * ms,
@@ -373,6 +363,31 @@ class cppTestCase(unittest.TestCase):
         self.assertRaises(
             AttributeError, stgen.cpp, A=[0, 1, 0], t_stop=10*1000 * ms,
             rate=[3, 4])
+
+    def test_cpp_jttered(self):
+        # testing output with generic inputs
+        A = [0, .9, .1]
+        t_stop = 10 * 1000 * ms
+        t_start = 5 * 1000 * ms
+        rate = 3 * Hz
+        cpp_shift = stgen.cpp(
+            rate, A, t_stop, t_start=t_start, shift=3*ms)
+        # testing the ouput formats
+        self.assertEqual(
+            [type(train) for train in cpp_shift], [neo.SpikeTrain]*len(
+                cpp_shift))
+        self.assertEqual(cpp_shift[0].simplified.units, 1000 * ms)
+        self.assertEqual(type(cpp_shift), list)
+        # testing quantities format of the output
+        self.assertEqual(
+            [train.simplified.units for train in cpp_shift],
+            [1000 * ms]*len(cpp_shift))
+        # testing output t_start t_stop
+        for st in cpp_shift:
+            self.assertEqual(st.t_stop, t_stop)
+            self.assertEqual(st.t_start, t_start)
+        self.assertEqual(len(cpp_shift), len(A) - 1)
+
 
 if __name__ == '__main__':
     unittest.main()
