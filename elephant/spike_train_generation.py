@@ -364,7 +364,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
             times[train_id] = mother[row].view(Quantity)
 
     except MemoryError:  # Slower (~2x) but less memory-consuming approach
-        print 'memory case'
+        print('memory case')
         times = [[] for i in range(N)]
         for t, l in zip(mother, labels):
             train_ids = random.sample(range(N), l)
