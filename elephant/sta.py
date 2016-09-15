@@ -12,7 +12,7 @@ import numpy as np
 import scipy.signal
 import quantities as pq
 
-from neo.core import AnalogSignalArray, SpikeTrain
+from neo.core import AnalogSignal, SpikeTrain
 from elephant.conversion import BinnedSpikeTrain
 
 import warnings
@@ -28,7 +28,7 @@ def spike_triggered_average(signal, spiketrains, window):
 
     Parameters
     ----------
-    signal : neo AnalogSignalArray object
+    signal : neo AnalogSignal object
         'signal' contains n analog signals.
     spiketrains : one SpikeTrain or one numpy ndarray or a list of n of either of these.
         'spiketrains' contains the times of the spikes in the spiketrains.
@@ -40,7 +40,7 @@ def spike_triggered_average(signal, spiketrains, window):
 
     Returns
     -------
-    result_sta : neo AnalogSignalArray object
+    result_sta : neo AnalogSignal object
         'result_sta' contains the spike-triggered averages of each of the
         analog signals with respect to the spikes in the corresponding
         spiketrains. The length of 'result_sta' is calculated as the number
@@ -50,12 +50,12 @@ def spike_triggered_average(signal, spiketrains, window):
         because of a too large averaging interval, the corresponding returned
         analog signal has all entries as nan. The number of used spikes and
         unused spikes for each analog signal are returned as annotations to 
-        the returned AnalogSignalArray object.
+        the returned AnalogSignal object.
 
     Examples
     --------
 
-    >>> signal = neo.AnalogSignalArray(np.array([signal1, signal2]).T, units='mV',
+    >>> signal = neo.AnalogSignal(np.array([signal1, signal2]).T, units='mV',
     ...                                sampling_rate=10/ms)
     >>> stavg = spike_triggered_average(signal, [spiketrain1, spiketrain2],
     ...                                 (-5 * ms, 10 * ms))
@@ -83,9 +83,9 @@ def spike_triggered_average(signal, spiketrains, window):
                          "earlier than the stop time of the window (window[1]).")
 
     # checks on signal
-    if not isinstance(signal, AnalogSignalArray):
+    if not isinstance(signal, AnalogSignal):
         raise TypeError(
-            "Signal must be an AnalogSignalArray, not %s." % type(signal))
+            "Signal must be an AnalogSignal, not %s." % type(signal))
     if len(signal.shape) > 1:
         # num_signals: number of analog signals
         num_signals = signal.shape[1]
@@ -138,7 +138,7 @@ def spike_triggered_average(signal, spiketrains, window):
     window_bins = int(np.ceil(((window_stoptime - window_starttime) *
         signal.sampling_rate).simplified))
     # result_sta: array containing finally the spike-triggered averaged signal
-    result_sta = AnalogSignalArray(np.zeros((window_bins, num_signals)),
+    result_sta = AnalogSignal(np.zeros((window_bins, num_signals)),
         sampling_rate=signal.sampling_rate, units=signal.units)
     # setting of correct times of the spike-triggered average
     # relative to the spike
@@ -200,7 +200,7 @@ def spike_field_coherence(signal, spiketrain, **kwargs):
 
     Parameters
     ----------
-    signal : neo AnalogSignalArray object
+    signal : neo AnalogSignal object
         'signal' contains n analog signals.
     spiketrain : SpikeTrain or BinnedSpikeTrain
         Single spike train to perform the analysis on. The binsize of the
@@ -265,9 +265,9 @@ def spike_field_coherence(signal, spiketrain, **kwargs):
             "not %s." % type(spiketrain))
 
     # checks on analogsignal
-    if not isinstance(signal, AnalogSignalArray):
+    if not isinstance(signal, AnalogSignal):
         raise TypeError(
-            "Signal must be an AnalogSignalArray, not %s." % type(signal))
+            "Signal must be an AnalogSignal, not %s." % type(signal))
     if len(signal.shape) > 1:
         # num_signals: number of individual traces in the analog signal
         num_signals = signal.shape[1]
