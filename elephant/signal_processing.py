@@ -218,7 +218,7 @@ def butter(signal, highpass_freq=None, lowpass_freq=None, order=4,
     # When the input is AnalogSignalArray, the axis for time index (i.e. the
     # first axis) needs to be rolled to the last
     data = np.asarray(signal)
-    if isinstance(signal, neo.AnalogSignalArray):
+    if isinstance(signal, neo.AnalogSignal):
         data = np.rollaxis(data, 0, len(data.shape))
 
     # apply filter
@@ -231,7 +231,7 @@ def butter(signal, highpass_freq=None, lowpass_freq=None, order=4,
             "filter_func must to be either 'filtfilt' or 'lfilter'"
         )
 
-    if isinstance(signal, neo.AnalogSignalArray):
+    if isinstance(signal, neo.AnalogSignal):
         return signal.duplicate_with_new_array(filtered_data.T)
     elif isinstance(signal, pq.quantity.Quantity):
         return filtered_data * signal.units
