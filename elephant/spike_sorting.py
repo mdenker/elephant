@@ -108,7 +108,15 @@ parameter_templates = {
                              'use_noise_cluster': True,
                              'log' : True,
         }
-
+    },
+    'manual' : {
+        'extraction_dict' : {
+                         'filter_high':400*pq.Hz,
+                         'filter_low':None,
+                         'threshold':-4.5,
+                         'n_pre':-10, 'n_post':10,
+                         'alignment':'min'
+        }
     }
 }
 
@@ -181,9 +189,11 @@ def get_updated_parameters(software,new_parameters):
                 template['spikedetekt']['threshold_strong_std_factor'] = value
                 overwritten = True
 
+        elif software == 'manual':
+            pass
+
         else:
             raise ValueError('Unknown spike sorting software "%s"'%software)
-
 
         if overwritten == False:
             warnings.warn('Could not assign spike extraction parameter '
@@ -749,6 +759,103 @@ def generate_spiketrains_from_phy(block, waveforms=True, sort=True, parameter_di
         kwik_spikes_to_neo_block(seg,traces,waveforms,sort)
 
 
+def generate_spiketrains_unsorted(block, waveforms=False, extraction_dict=None):
+
+    filter_high = extraction_dict['filter_high']
+    filter_low = extraction_dict['filter_low']
+    threshold = extraction_dict['threshold']
+    if waveforms:
+        n_pre, n_post = [extraction_dict[key] for key in ['n_pre','n_post']]
+        alignment = extraction_dict['alignment']
+
+    def get_threshold_crossing_ids(sig,threshold):
+        # normalize threshold to be positive
+        if threshold < 0:
+            threshold = -threshold
+            sig = sig*(-1)
+        # calculate ids at which signal crosses threshold value
+        crossings = (threshold - sig).magnitude
+        crossings *= (crossings>0)
+        mask_bool = crossings.astype(bool).astype(int)
+        crossing_ids = np.where(np.diff(mask_bool)==-1)[0]
+        return crossing_ids
+
+    def check_threshold(threshold,signal):
+        if isinstance(threshold,pq.quantity.Quantity):
+            thres = threshold
+        elif isinstance(threshold,(int,float)):
+            warnings.warn('Assuming threshold is given in standard deviations '
+                          'of the signal amplitude')
+            thres = threshold*np.std(sig)
+        else:
+            raise ValueError('Unknown threshold unit "%s"'%threshold)
+        return thres
+
+    for seg in block.segments:
+        for anasig_id, anasig in enumerate(seg.analogsignalarrays):
+            sig = elephant.signal_processing.butter(anasig, filter_high,
+                                                    filter_low)
+
+            thres = check_threshold(threshold,sig)
+
+            ids = get_threshold_crossing_ids(sig, thres)
+
+            # remove border ids
+            ids = ids[np.logical_and(ids > -n_pre, ids < (len(sig)-n_post))]
+
+            st = neo.SpikeTrain(anasig.times[ids], unit_id=None, sorted=False,
+                name="Channel %i, Unit %i" % (anasig.channel_index, -1),
+                t_start=anasig.t_start,t_stop=anasig.t_stop,
+                sampling_rate=anasig.sampling_rate,
+                electrode_id=anasig.annotations['electrode_id'],
+                channel_index=anasig.annotations['channel_index'],
+                left_sweep=n_pre*(-1),
+                n_pre=n_pre,
+                n_post=n_post)
+            seg.spiketrains.append(st)
+
+            print len(st)
+
+
+
+            if waveforms and len(ids):
+                wfs = np.zeros((n_post - n_pre,len(ids))) * anasig.units
+                for i, id in enumerate(ids):
+                    try:
+                        wfs[:,i] = anasig[id+n_pre:id+n_post]
+                    except:
+                        pass
+                if alignment=='min':
+                    minima = np.min(wfs,axis=0)
+                    wfs = wfs - minima[np.newaxis,:]
+                else:
+                    raise ValueError('Unknown aligmnment "%s"'%alignment)
+                st.waveforms = wfs.T
+
+
+            # connecting unit and segment
+            rcgs = anasig.recordingchannel.recordingchannelgroups
+            u_annotations = {'sorted': False,
+                             'parameters': {'extraction_dict':extraction_dict}}
+
+            new_unit = None
+            for rcg in rcgs:
+                # checking if a similar unit already exists (eg. from sorting a different segment)
+                rcg_units = [u for u in rcg.units if u.name == st.name and u.annotations == u_annotations]
+                if len(rcg_units) == 1:
+                    unit = rcg_units[0]
+                elif len(rcg_units) == 0:
+                    # Generating new unit if necessary
+                    if new_unit is None:
+                        new_unit = neo.core.Unit(name=st.name, **u_annotations)
+                    unit = new_unit
+                else:
+                    raise ValueError('%i units of name %s and annotations %s exists.'
+                                     ' This is ambiguous.' % (len(rcg_units), st.name, u_annotations))
+                rcg.units.append(unit)
+                unit.spiketrains.append(st)
+
+
 
 
 
@@ -769,6 +876,14 @@ def generate_spiketrains(block, software, waveforms=True, sort=True, parameter_d
         extraction_dict = spikesort_parameters['extraction_dict']
         sorting_dict = spikesort_parameters['sorting_dict']
         generate_spiketrains_from_spikesort(block, waveforms=waveforms, sort=sort, extraction_dict=extraction_dict, sorting_dict=sorting_dict)
+
+    elif software == 'manual':
+        manual_parameters = get_updated_parameters(software=software,
+                                                   new_parameters=parameter_dict)
+        extraction_dict = manual_parameters['extraction_dict']
+        generate_spiketrains_unsorted(block, waveforms=waveforms,
+                                      extraction_dict=extraction_dict)
+
 
 
 
