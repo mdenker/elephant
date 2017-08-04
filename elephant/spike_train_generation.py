@@ -13,9 +13,10 @@ written by Eilif Muller, or from the NeuroTools signals.analogs module.
 from __future__ import division
 import numpy as np
 from quantities import ms, mV, Hz, Quantity, dimensionless
-from neo import SpikeTrain
+from neo import SpikeTrain, AnalogSignal
 import random
 from elephant.spike_train_surrogates import dither_spike_train
+import quantities as pq
 import warnings
 
 
@@ -968,3 +969,419 @@ def compound_poisson_process(rate, A, t_stop, shift=None, t_start=0 * ms):
 
 # Alias for the compound poisson process
 cpp = compound_poisson_process
+
+def poisson_nonstat(rate_signal, N=1, method='time_rescale'):
+    '''
+    Generates an ensemble of non-stationary Poisson processes with identical
+    intensity.
+
+    Parameters
+    ----------
+    rate_signal : neo.AnalogSignal or list
+        The analog signal containing the discretization on the time axis of the
+        rate profile function of the spike trains to generate or the list of
+        the different signal for each neuron
+    N : int
+        ensemble sizen number of spike trains n output, in case rate_signa is
+        a list of different signal, N spike trains for each different rate
+        profiles are generated
+        Default: N=1
+    method : string
+        The method used to generate the non-stationary poisson process:
+        *'time_rescale': method based on the time rescaling theorem
+        (ref. Brwn et al. 2001)
+        *'thinning': thinning method of a stationary poisson process
+        (ref. Sigman Notes 2013)
+        Default:'time_rescale'
+    -------
+    spiketrains : list(list(float))
+        list of spike trains
+    '''
+    methods_dic = {
+        'time_rescale': poisson_nonstat_time_rescale,
+        'thinning': poisson_nonstat_thinning}
+    if method not in methods_dic:
+        raise ValueError("Unknown method selected.")
+    method_use = methods_dic[method]
+    if isinstance(rate_signal, AnalogSignal):
+        if N is None:
+                sts = method_use(rate_signal)
+        else:
+            sts = method_use(rate_signal, N=N)
+    else:
+        sts = []
+        for r in rate_signal:
+            sts = sts + method_use(r, N=N)
+    return sts
+
+
+def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
+    '''
+    Generates an ensemble of non-stationary Poisson processes with identical
+    intensity.
+
+    Parameters
+    ----------
+    rate_signal : neo.AnalogSignal
+        The analog signal containing the discretization on the time axis of the
+        rate profile function of the spike trains to generate
+
+    N : int
+        ensemble size
+    csteps : int, default csteps=1000
+        spike count resolution
+        (number of steps between min. and max. spike count)
+
+    Returns
+    -------
+    spiketrains : list(list(float))
+        list of spike trains (len(spiketrains)=N)
+           spiketimes  : array(float)
+                         array of spike times
+
+    (Tetzlaff, 2009-02-09, adapted to neo format)
+
+    '''
+    if any(rate_signal < 0) or not rate_signal.size:
+            raise ValueError(
+                'rate must be a positive non empty signal, representing the'
+                'rate at time t')
+    if not (type(N) == int and N > 0):
+            raise ValueError('N (=%s) must be a positive integer' % str(N))
+    #rescaling the unit of the signal
+    elif np.any(rate_signal > 0) and rate_signal.units == pq.Hz:
+        signal_simpl = rate_signal.simplified
+        t_start_simpl = rate_signal.t_start.simplified
+        t_stop_simpl = rate_signal.t_stop.simplified
+        sampling_period_simpl = rate_signal.sampling_period.simplified
+        rate_signal = AnalogSignal(
+            signal=signal_simpl, t_start=t_start_simpl, t_stop=t_stop_simpl,
+            sampling_period=sampling_period_simpl)
+        ## rectification of intensity
+        dt = rate_signal.sampling_period
+        out = []
+
+        ## compute cumulative intensity function and its inverse
+        # cumulative rate function (intensity)
+        crf = _cumrate(rate_signal, dt)
+        # inverse of cumulative intensity
+        icrf, dc, D = _invcumrate(crf, csteps)
+        icrf *= dt  # convert icrf to time
+
+        ## generate spike trains
+        for cn in range(N):
+            buf = _poisson_nonstat_single(icrf, dc, D, dt)
+            st = SpikeTrain(
+                buf, t_stop=rate_signal.t_stop - rate_signal.t_start,
+                units=rate_signal.t_stop.units)
+#            st = st + rate_signal.t_start
+            st = shift_spiketrain(st, rate_signal.t_start)
+            st.t_start = rate_signal.t_start
+            st.t_stop = rate_signal.t_stop
+            out.append(st)
+        return out
+    elif rate_signal.units == pq.Hz:
+        return(
+            [SpikeTrain(
+                [], t_stop=rate_signal.t_stop,
+                units=rate_signal.t_stop.units) for i in range(N)])
+    else:
+        raise ValueError(
+            'rate must be in Hz, representing the rate at time t')
+
+
+def _poisson_nonstat_single(icrf, dc, D, dt, refr_period = False):
+    '''
+    Generates an inhomogeneous Poisson process for a given intensity
+    (rate function).
+
+    Parameters
+    ----------
+    icrf  : array(float)
+        inverse of cumulative intensity function (see invcumrate())
+    dc : float
+        spike count resolution (see invcumrate())
+    D : float
+        expected number of spikes at simulation end (see invcumrate())
+    dt     : float
+                    time resolution
+
+    Returns
+    -------
+    spiketimes : array(float)
+        array of spike times
+
+    (Tetzlaff, 2009-02-09)
+
+    '''
+    # number of spikes in interval [0,T]
+    nspikes = np.random.poisson(D)
+
+    # uniform distribution of nspikes spikes in [0,D]
+    counts = D * np.sort(np.random.rand(nspikes))
+
+    ind = np.where(np.ceil(counts/dc) + 1 <= len(icrf))
+    t1 = icrf[np.floor(counts[ind] / dc).astype('i')]
+    t2 = icrf[np.floor(counts[ind] / dc).astype('i') + 1]
+    m = t2 - t1
+    spiketimes = t1 + m * (counts[ind] / dc + 1 - np.ceil(counts[ind] / dc))
+    spiketimes = np.array(spiketimes)
+#    spiketimes = spiketimes + (np.array([0]+list(np.diff(spiketimes) > 0.001)))
+    if len(spiketimes>0) and refr_period:
+        spiketimes = np.hstack(
+            (
+                spiketimes[0], spiketimes[np.where(
+                    np.diff(spiketimes) > (
+                        np.random.rand() / 1000. + 0.001))[0]+1]))
+    return spiketimes
+
+
+def _cumrate(intensity, dt):
+    '''
+    Cumulative intensity function.
+
+    Parameters
+    ----------
+    intensity : array(float)
+        intensity function (instantaneous rate)
+    dt : float
+        time resolution
+
+    Output
+    ------
+    crf : array(float)
+        cumulative intensity function
+
+    (Tetzlaff, 2009-02-09)
+
+    '''
+    # integral of intensity
+    crf = dt.magnitude * np.cumsum(intensity.magnitude)
+    return crf
+
+
+def _invcumrate(crf, csteps=1000):
+    '''
+    Inverse of the cumulative intensity function.
+
+    Parameters
+    ----------
+    crf : array(float)
+        cumulative intensity function (see cumrate())
+    csteps : int, default csteps=1000
+        number of steps between min. and max. spike count
+
+    Returns:
+    -------
+    icrf : array(float)
+        inverse of cumulative intensity function
+    dc : float
+        spike count resolution
+    D : float
+        expected number of spikes at simulation end
+
+    (Tetzlaff, 2009-02-09)
+
+    '''
+
+    D = crf[-1]  # cumulative spike-count at time T
+    dc = D / csteps  # spike-count resolution
+    icrf = np.nan * np.ones(csteps, 'f')
+
+    k = 0
+    for i in range(csteps):  # loop over spike-count grid
+        ## find smallest k such that crf[k]>i*dc
+        while crf[k] <= i * dc:
+            k += 1
+
+        if k == 0:
+            icrf[i] = 0.0
+        else:
+            # interpolate between crf[pl] and crf[pr]
+            m = 1. / (crf[k] - crf[k - 1])  # approximated slope of icrf
+            icrf[i] = np.float(k - 1) + m * (
+                np.float(i * dc) - crf[k - 1])  # interpolated value of icrf
+
+    return icrf, dc, D
+
+
+def shift_spiketrain(spiketrain, t):
+    '''
+    Shift the times of a SpikeTrain by an amount t.
+
+    Shifts also the SpikeTrain's attributes t_start and t_stop by t.
+    Retains the SpikeTrain's waveforms, sampling_period, annotations.
+
+    Paramters
+    ---------
+    spiketrain : SpikeTrain
+        the spike train to be shifted
+    t : Quantity
+        the amount by which to shift the spike train
+
+    Returns
+    -------
+    SpikeTrain : SpikeTrain
+       a new SpikeTrain, whose times and attributes t_start, t_stop are those
+       of the input spiketrain  shifted by an amount t. Waveforms, sampling
+       period and annotations are also retained.
+    '''
+    st = spiketrain
+    st_shifted = SpikeTrain(
+        st.view(pq.Quantity) + t, t_start=st.t_start + t,
+        t_stop=st.t_stop + t, waveforms=st.waveforms)
+    st_shifted.sampling_period = st.sampling_period
+    st_shifted.annotations = st.annotations
+
+    return st_shifted
+
+
+def poisson_nonstat_thinning(rate_signal, N=1, cont_sign_method='step'):
+    '''
+    Generate non-stationary Poisson SpikeTrains with a common rate profile.
+
+
+    Parameters
+    -----
+    rate_signal : AnalogSignal
+        An AnalogSignal representing the rate profile evolving over time.
+        Note that, if rate_profile
+
+    cont_sign_method : str, optional
+        The approximation method used to make continuous the analog signal:
+        * 'step': the signal is approximed in each nterval of rate_signal.times
+          with the value of the signal at the left extrem of the interval
+        * 'linear': linear interpolation is used
+        Default: 'step'
+
+    Output
+    -----
+    Poisson SpikeTrain with profile rate lambda(t)= rate_signal
+    '''
+    if any(rate_signal < 0) or not rate_signal.size:
+        raise ValueError(
+            'rate must be a positive non empty signal, representing the'
+            'rate at time t')
+    # Define the interpolation method
+    else:
+        methods_dic = {
+            'linear': _analog_signal_linear_interp,
+            'step': _analog_signal_step_interp}
+
+        if cont_sign_method not in methods_dic:
+            raise ValueError("Unknown method selected.")
+
+        interp = methods_dic[cont_sign_method]
+
+        #Generate n hidden Poisson SpikeTrains with rate equal to the peak rate
+        lambda_star = max(rate_signal)
+        poiss = _n_poisson(
+            rate=lambda_star, t_stop=rate_signal.t_stop,
+            t_start=rate_signal.t_start, n=N)
+
+        # For each SpikeTrain, retain spikes according to uniform probabilities
+        # and add the resulting spike train to the list sts
+        sts = []
+        for st in poiss:
+            # Compute the rate profile at each spike time by interpolation
+            lamb = interp(signal=rate_signal, times=st.magnitude * st.units)
+
+            # Accept each spike at time t with probability r(t)/max_rate
+            u = np.random.uniform(size=len(st)) * lambda_star
+            spiketrain = st[u < lamb]
+            sts.append(spiketrain)
+
+        return sts
+
+
+def _analog_signal_linear_interp(signal, times):
+    '''
+    Compute the linear interpolation of a signal at desired times.
+
+    Given a signal (e.g. an AnalogSignal) AS taking value s0 and s1 at two
+    consecutive time points t0 and t1 (t0 < t1), the value s of the linear
+    interpolation at time t: t0 <= t < t1 is given by:
+
+                s = ((s1 - s0) / (t1 - t0)) * t + s0,
+    for any time t between AS.t_start and AS.t_stop
+
+    NOTE: If AS has sampling period dt, its values are defined at times
+    t[i] = s.t_start + i * dt. The last of such times is lower than s.t_stop:
+    t[-1] = s.t_stop - dt. For the interpolation at times t such that
+    t[-1] <= t <= AS.t_stop, the value of AS at AS.t_stop is taken to be that
+    at time t[-1].
+
+
+    Parameters
+    -----
+    times : Quantity vector(time)
+        The time points for which the interpolation is computed
+
+    signal : neo.core.AnalogSignal
+        The analog signal containing the discretization of the funtion to
+        interpolate
+
+
+    Output
+    -----
+    Quantity array representing the values of the interpolated signal at the
+    times given by times
+    '''
+    dt = signal.sampling_period
+
+    t_start = signal.t_start
+    t_stop = signal.t_stop.rescale(signal.times.units)
+
+    # Extend the signal (as a dimensionless array) copying the last value
+    # one time, and extend its times to t_stop
+    signal_extended = np.hstack([signal.magnitude, signal[-1].magnitude])
+    times_extended = np.hstack([signal.times, t_stop]) * signal.times.units
+
+    time_ids = np.floor(((times - t_start) / dt).rescale(
+        pq.dimensionless).magnitude).astype('i')
+
+    # Compute the slope m of the signal at each time in times
+    y1 = signal_extended[time_ids]
+    y2 = signal_extended[time_ids + 1]
+    m = (y2 - y1) / dt
+
+    # Interpolate the signal at each time in times by linear interpolation
+    # TODO: return as an IrregularlySampledSignal?
+    out = (y1 + m * (times - times_extended[time_ids])) * signal.units
+    return out.rescale(signal.units)
+
+
+def _analog_signal_step_interp(signal, times):
+    '''
+    Compute the step-wise interpolation of a signal at desired times.
+
+    Given a signal (e.g. an AnalogSignal) AS taking value s0 and s1 at two
+    consecutive time points t0 and t1 (t0 < t1), the value s of the step-wise
+    interpolation at time t: t0 <= t < t1 is given by s=s0, for any time t
+    between AS.t_start and AS.t_stop.
+
+
+    Parameters
+    -----
+    times : Quantity vector(time)
+        The time points for which the interpolation is computed
+
+    signal : neo.core.AnalogSignal
+        The analog signal containing the discretization of the funtion to
+        interpolate
+
+
+    Output
+    -----
+    Quantity aray representing the values of the interpolated signal at the
+    times given by times
+    '''
+    dt = signal.sampling_period
+
+    # Compute the ids of the signal times to the left of each time in times
+    time_ids = np.floor(
+        ((times - signal.t_start) / dt).rescale(pq.dimensionless).magnitude
+        ).astype('i')
+
+    # TODO: return as an IrregularlySampledSignal?
+    return(signal.magnitude[time_ids] * signal.units).rescale(signal.units)
