@@ -1,9 +1,14 @@
+import sys
 import warnings
+from functools import wraps
 import atexit
 import inspect
 import tempfile
 import numpy as np
 import copy
+import sklearn.cluster
+# from sklearn.decomposition import PCA
+# from sklearn.cluster import KMeans
 import quantities as pq
 import os.path
 from os import linesep as sep
@@ -123,85 +128,85 @@ parameter_templates = {
 }
 
 
-def get_updated_parameters(software,new_parameters):
-    # get template parameters
-    if software in parameter_templates:
-        template = copy.deepcopy(parameter_templates[software])
-    else: raise ValueError('No spike sorting software with name "%s" known. '
-                           'Available softwares include %s'%(software,parameter_templates.keys()))
-
-
-    for key, value in new_parameters.iteritems():
-        # scan if this key is available in template and should be overwritten
-        overwritten = False
-        for template_section_name, template_section in template.iteritems():
-            if hasattr(template_section,'iteritems'):
-                for template_key, template_value in template_section.iteritems():
-                    if key == template_key:
-                        template[template_section_name][template_key] = value
-                        overwritten = True
-
-        if software == 'spikesort':
-            # translation of similar keywords (for better compatibility between sorting softwares available)
-            if key == 'filter_low':
-                template['extraction_dict']['filter'][1] = value * pq.Hz
-                overwritten = True
-            elif key == 'filter_high':
-                template['extraction_dict']['filter'][0] = value * pq.Hz
-                overwritten = True
-            elif key == 'extract_s_before':
-                template['extraction_dict']['sp_win_extract'][0] = -1*value
-                overwritten = True
-            elif key == 'extraction_s_after':
-                template['extraction_dict']['sp_win_extract'][1] = value
-                overwritten = True
-
-        elif software == 'phy':
-            # translation of similar keywords (for better compatibility between sorting softwares available)
-            if key == 'filter':
-                if value[0] != None:
-                    template['spikedetekt']['filter_high'] = value[0].rescale('Hz').magnitude
-                else:
-                    template['spikedetekt']['filter_high'] = 0
-                if value[1] != None:
-                    template['spikedetekt']['filter_low'] = value[1].rescale('Hz').magnitude
-                else:
-                    template['spikedetekt']['filter_low'] = 0
-                overwritten = True
-            elif key == 'sp_win_extract':
-                template['spikedetekt']['extraction_s_before'] = -1*value[0]
-                template['spikedetekt']['extraction_s_after'] = value[0]
-                overwritten = True
-            elif key == 'filter_order':
-                template['spikedetekt']['filter_butter_order'] = value
-                overwritten = True
-            elif key == 'filter_order':
-                template['spikedetekt']['filter_butter_order'] = value
-                overwritten = True
-            elif key == 'egde':
-                if value == 'falling':
-                    value = 'negative'
-                elif value == 'rising':
-                    value = 'positive'
-                template['spikedetekt']['detect_spikes'] = value
-                overwritten = True
-            elif key == 'threshold':
-                warnings.warn('Assuming threshold of %s as strong_threshold_std_factor'
-                              ' for spike extraction with phy.'%value)
-                template['spikedetekt']['threshold_strong_std_factor'] = value
-                overwritten = True
-
-        elif software == 'manual':
-            pass
-
-        else:
-            raise ValueError('Unknown spike sorting software "%s"'%software)
-
-        if overwritten == False:
-            warnings.warn('Could not assign spike extraction parameter '
-                          'value "%s" to any parameter named "%s" or similar'%(value,key))
-
-    return template
+# def get_updated_parameters(software,new_parameters):
+#     # get template parameters
+#     if software in parameter_templates:
+#         template = copy.deepcopy(parameter_templates[software])
+#     else: raise ValueError('No spike sorting software with name "%s" known. '
+#                            'Available softwares include %s'%(software,parameter_templates.keys()))
+#
+#
+#     for key, value in new_parameters.iteritems():
+#         # scan if this key is available in template and should be overwritten
+#         overwritten = False
+#         for template_section_name, template_section in template.iteritems():
+#             if hasattr(template_section,'iteritems'):
+#                 for template_key, template_value in template_section.iteritems():
+#                     if key == template_key:
+#                         template[template_section_name][template_key] = value
+#                         overwritten = True
+#
+#         if software == 'spikesort':
+#             # translation of similar keywords (for better compatibility between sorting softwares available)
+#             if key == 'filter_low':
+#                 template['extraction_dict']['filter'][1] = value * pq.Hz
+#                 overwritten = True
+#             elif key == 'filter_high':
+#                 template['extraction_dict']['filter'][0] = value * pq.Hz
+#                 overwritten = True
+#             elif key == 'extract_s_before':
+#                 template['extraction_dict']['sp_win_extract'][0] = -1*value
+#                 overwritten = True
+#             elif key == 'extraction_s_after':
+#                 template['extraction_dict']['sp_win_extract'][1] = value
+#                 overwritten = True
+#
+#         elif software == 'phy':
+#             # translation of similar keywords (for better compatibility between sorting softwares available)
+#             if key == 'filter':
+#                 if value[0] != None:
+#                     template['spikedetekt']['filter_high'] = value[0].rescale('Hz').magnitude
+#                 else:
+#                     template['spikedetekt']['filter_high'] = 0
+#                 if value[1] != None:
+#                     template['spikedetekt']['filter_low'] = value[1].rescale('Hz').magnitude
+#                 else:
+#                     template['spikedetekt']['filter_low'] = 0
+#                 overwritten = True
+#             elif key == 'sp_win_extract':
+#                 template['spikedetekt']['extraction_s_before'] = -1*value[0]
+#                 template['spikedetekt']['extraction_s_after'] = value[0]
+#                 overwritten = True
+#             elif key == 'filter_order':
+#                 template['spikedetekt']['filter_butter_order'] = value
+#                 overwritten = True
+#             elif key == 'filter_order':
+#                 template['spikedetekt']['filter_butter_order'] = value
+#                 overwritten = True
+#             elif key == 'egde':
+#                 if value == 'falling':
+#                     value = 'negative'
+#                 elif value == 'rising':
+#                     value = 'positive'
+#                 template['spikedetekt']['detect_spikes'] = value
+#                 overwritten = True
+#             elif key == 'threshold':
+#                 warnings.warn('Assuming threshold of %s as strong_threshold_std_factor'
+#                               ' for spike extraction with phy.'%value)
+#                 template['spikedetekt']['threshold_strong_std_factor'] = value
+#                 overwritten = True
+#
+#         elif software == 'manual':
+#             pass
+#
+#         else:
+#             raise ValueError('Unknown spike sorting software "%s"'%software)
+#
+#         if overwritten == False:
+#             warnings.warn('Could not assign spike extraction parameter '
+#                           'value "%s" to any parameter named "%s" or similar'%(value,key))
+#
+#     return template
 
 
 
@@ -762,106 +767,106 @@ def generate_spiketrains_from_phy(block, waveforms=True, sort=True, parameter_di
         kwik_spikes_to_neo_block(seg,traces,waveforms,sort)
 
 
-def generate_spiketrains_unsorted(block, waveforms=False, extraction_dict=None):
-
-    filter_high = extraction_dict['filter_high']
-    filter_low = extraction_dict['filter_low']
-    threshold = extraction_dict['threshold']
-    if waveforms:
-        n_pre, n_post = [extraction_dict[key] for key in ['n_pre','n_post']]
-        alignment = extraction_dict['alignment']
-
-    def get_threshold_crossing_ids(sig,threshold):
-        # normalize threshold to be positive
-        if threshold < 0:
-            threshold = -threshold
-            sig = sig*(-1)
-        # calculate ids at which signal crosses threshold value
-        crossings = (threshold - sig).magnitude
-        crossings *= (crossings>0)
-        mask_bool = crossings.astype(bool).astype(int)
-        crossing_ids = np.where(np.diff(mask_bool, axis=0)==-1)[0]
-        return crossing_ids
-
-    def check_threshold(threshold,signal):
-        if isinstance(threshold,pq.quantity.Quantity):
-            thres = threshold
-        elif isinstance(threshold,(int,float)):
-            warnings.warn('Assuming threshold is given in standard deviations '
-                          'of the signal amplitude.')
-            thres = threshold*np.std(sig)
-        else:
-            raise ValueError('Unknown threshold unit "%s"'%threshold)
-        return thres
-
-    for seg in block.segments:
-        for anasig_id, anasig in enumerate(seg.analogsignals):
-            sig = elephant.signal_processing.butter(anasig, filter_high,
-                                                    filter_low)
-
-            thres = check_threshold(threshold,sig)
-
-            ids = get_threshold_crossing_ids(sig, thres)
-
-            # remove border ids
-            ids = ids[np.logical_and(ids > -n_pre, ids < (len(sig)-n_post))]
-
-            st = neo.SpikeTrain(anasig.times[ids], unit_id=None, sorted=False,
-                name="Channel %s, Unit %i" % (anasig.get_channel_index(), -1),
-                t_start=anasig.t_start,t_stop=anasig.t_stop,
-                sampling_rate=anasig.sampling_rate,
-                electrode_id=anasig.annotations['electrode_id'],
-                channel_index=anasig.annotations['channel_index'],
-                left_sweep=n_pre*(-1),
-                n_pre=n_pre,
-                n_post=n_post)
-            seg.spiketrains.append(st)
-
-            print len(st)
-
-
-
-            if waveforms and len(ids):
-                wfs = np.zeros((n_post - n_pre,len(ids))) * anasig.units
-                for i, id in enumerate(ids):
-                    try:
-                        wfs[:,i] = anasig[id+n_pre:id+n_post]
-                    except:
-                        pass
-                if alignment=='min':
-                    minima = np.min(wfs,axis=0)
-                    wfs = wfs - minima[np.newaxis,:]
-                else:
-                    raise ValueError('Unknown aligmnment "%s"'%alignment)
-                st.waveforms = wfs.T
-
-
-            # connecting unit and segment
-            current_chidx = anasig.channel_index
-            u_annotations = {'sorted': False,
-                             'parameters': {'extraction_dict':extraction_dict}}
-
-            channel_indexes = [anasig.channel_index]
-            new_unit = None
-            for chidx in channel_indexes:
-                # checking if a similar unit already exists (eg. from sorting a different segment)
-                chidx_units = [u for u in chidx.units if u.name == st.name and
-                             u.annotations == u_annotations]
-                if len(chidx_units) == 1:
-                    unit = chidx_units[0]
-                elif len(chidx_units) == 0:
-                    # Generating new unit if necessary
-                    if new_unit is None:
-                        new_unit = neo.core.Unit(name=st.name, **u_annotations)
-                    unit = new_unit
-                else:
-                    raise ValueError('%i units of name %s and annotations %s exists.'
-                                     ' This is ambiguous.' % (len(chidx_units), st.name, u_annotations))
-                chidx.units.append(unit)
-                unit.spiketrains.append(st)
-
-
-
+# def generate_spiketrains_unsorted(block, waveforms=False, extraction_dict=None):
+#
+#     filter_high = extraction_dict['filter_high']
+#     filter_low = extraction_dict['filter_low']
+#     threshold = extraction_dict['threshold']
+#     if waveforms:
+#         n_pre, n_post = [extraction_dict[key] for key in ['n_pre','n_post']]
+#         alignment = extraction_dict['alignment']
+#
+#     def get_threshold_crossing_ids(sig,threshold):
+#         # normalize threshold to be positive
+#         if threshold < 0:
+#             threshold = -threshold
+#             sig = sig*(-1)
+#         # calculate ids at which signal crosses threshold value
+#         crossings = (threshold - sig).magnitude
+#         crossings *= (crossings>0)
+#         mask_bool = crossings.astype(bool).astype(int)
+#         crossing_ids = np.where(np.diff(mask_bool, axis=0)==-1)[0]
+#         return crossing_ids
+#
+#     def check_threshold(threshold,signal):
+#         if isinstance(threshold,pq.quantity.Quantity):
+#             thres = threshold
+#         elif isinstance(threshold,(int,float)):
+#             warnings.warn('Assuming threshold is given in standard deviations '
+#                           'of the signal amplitude.')
+#             thres = threshold*np.std(sig)
+#         else:
+#             raise ValueError('Unknown threshold unit "%s"'%threshold)
+#         return thres
+#
+#     for seg in block.segments:
+#         for anasig_id, anasig in enumerate(seg.analogsignals):
+#             sig = elephant.signal_processing.butter(anasig, filter_high,
+#                                                     filter_low)
+#
+#             thres = check_threshold(threshold,sig)
+#
+#             ids = get_threshold_crossing_ids(sig, thres)
+#
+#             # remove border ids
+#             ids = ids[np.logical_and(ids > -n_pre, ids < (len(sig)-n_post))]
+#
+#             st = neo.SpikeTrain(anasig.times[ids], unit_id=None, sorted=False,
+#                 name="Channel %s, Unit %i" % (anasig.get_channel_index(), -1),
+#                 t_start=anasig.t_start,t_stop=anasig.t_stop,
+#                 sampling_rate=anasig.sampling_rate,
+#                 electrode_id=anasig.annotations['electrode_id'],
+#                 channel_index=anasig.annotations['channel_index'],
+#                 left_sweep=n_pre*(-1),
+#                 n_pre=n_pre,
+#                 n_post=n_post)
+#             seg.spiketrains.append(st)
+#
+#             print len(st)
+#
+#
+#
+#             if waveforms and len(ids):
+#                 wfs = np.zeros((n_post - n_pre,len(ids))) * anasig.units
+#                 for i, id in enumerate(ids):
+#                     try:
+#                         wfs[:,i] = anasig[id+n_pre:id+n_post]
+#                     except:
+#                         pass
+#                 if alignment=='min':
+#                     minima = np.min(wfs,axis=0)
+#                     wfs = wfs - minima[np.newaxis,:]
+#                 else:
+#                     raise ValueError('Unknown aligmnment "%s"'%alignment)
+#                 st.waveforms = wfs.T
+#
+#
+#             # connecting unit and segment
+#             current_chidx = anasig.channel_index
+#             u_annotations = {'sorted': False,
+#                              'parameters': {'extraction_dict':extraction_dict}}
+#
+#             channel_indexes = [anasig.channel_index]
+#             new_unit = None
+#             for chidx in channel_indexes:
+#                 # checking if a similar unit already exists (eg. from sorting a different segment)
+#                 chidx_units = [u for u in chidx.units if u.name == st.name and
+#                              u.annotations == u_annotations]
+#                 if len(chidx_units) == 1:
+#                     unit = chidx_units[0]
+#                 elif len(chidx_units) == 0:
+#                     # Generating new unit if necessary
+#                     if new_unit is None:
+#                         new_unit = neo.core.Unit(name=st.name, **u_annotations)
+#                     unit = new_unit
+#                 else:
+#                     raise ValueError('%i units of name %s and annotations %s exists.'
+#                                      ' This is ambiguous.' % (len(chidx_units), st.name, u_annotations))
+#                 chidx.units.append(unit)
+#                 unit.spiketrains.append(st)
+#
+#
+#
 
 
 
@@ -891,12 +896,12 @@ def generate_spiketrains(block, software, waveforms=True, sort=True, parameter_d
         sorting_dict = spikesort_parameters['sorting_dict']
         generate_spiketrains_from_spikesort(block, waveforms=waveforms, sort=sort, extraction_dict=extraction_dict, sorting_dict=sorting_dict)
 
-    elif software == 'manual':
-        manual_parameters = get_updated_parameters(software=software,
-                                                   new_parameters=parameter_dict)
-        extraction_dict = manual_parameters['extraction_dict']
-        generate_spiketrains_unsorted(block, waveforms=waveforms,
-                                      extraction_dict=extraction_dict)
+    # elif software == 'manual':
+    #     manual_parameters = get_updated_parameters(software=software,
+    #                                                new_parameters=parameter_dict)
+    #     extraction_dict = manual_parameters['extraction_dict']
+    #     generate_spiketrains_unsorted(block, waveforms=waveforms,
+    #                                   extraction_dict=extraction_dict)
 
 
 ####################### Supplementory Functions ###########################
@@ -906,6 +911,15 @@ def getRequiredArgs(func):
     if defaults:
         args = args[:-len(defaults)]
     return args
+
+def getKwArgs(func):
+    args, varargs, varkw, defaults = inspect.getargspec(func)
+    if defaults:
+        args = args[-len(defaults):]
+    return args
+
+def getArgs(func):
+    return inspect.getargspec(func)[0]
 
 def missingArgs(func, argdict):
     return set(getRequiredArgs(func)).difference(argdict)
@@ -923,7 +937,7 @@ class SpikeSorter(object):
 
     accepted_arguments = set()
 
-    def __init__(self, parameter_dict):
+    def __init__(self, **parameter_dict):
         self.parameter_dict = parameter_dict
         pass
 
@@ -944,25 +958,26 @@ class SpikeSorter(object):
             elif isinstance(o, pq.Quantity):
                 return hash(str(o))
 
-            elif not isinstance(o, dict):
-
+            elif isinstance(o, dict):
+                new_o = copy.deepcopy(o)
+                for k, v in new_o.items():
+                    new_o[k] = _make_hash(v)
+                return hash(str(sorted(new_o)))
+                # old version below yields different hashed in different
+                # interpreter instances.
+                # return hash(tuple(frozenset(sorted(new_o.items()))))
+            else:
                 return hash(o)
-
-            new_o = copy.deepcopy(o)
-            for k, v in new_o.items():
-                new_o[k] = _make_hash(v)
-
-            return hash(tuple(frozenset(sorted(new_o.items()))))
 
         return _make_hash(parameter_dict)
 
-    def SortedSpikeTrain(self, *args, **kwargs):
-        kwargs['sorting_hash'] = self.sorting_hash
-        return neo.SpikeTrain(*args,**kwargs)
+    # def SortedSpikeTrain(self, *args, **kwargs):
+    #     kwargs['sorting_hash'] = self.sorting_hash
+    #     return neo.SpikeTrain(*args,**kwargs)
 
     @property
     def sorting_hash(self):
-        self.get_sorting_hash(self.parameter_dict)
+        return self.get_sorting_hash(self.parameter_dict)
 
     def sort_analogsignal(self, anasig):
         raise NotImplementedError
@@ -982,50 +997,150 @@ class SpikeSorter(object):
                 break
 
         if chidx is None:
-            chidx = neo.ChannelIndex(name='spike sorting channel_index',
+            chidx = neo.ChannelIndex([0], #TODO: what index should be used here?
+                                     name='spike sorting channel_index',
                                      sorting_hash=self.sorting_hash)
+            block.channel_indexes.append(chidx)
+            chidx.block = block
+            block.create_relationship()
 
         return chidx
 
-    def _add_unit(self, anasig, unit_id):
-        unit = None
-        if 'channel_id' in anasig.annotations:
-            channel_id = anasig.annotations['channel_id']
+    def _get_channel_id(self, neo_obj):
+        channel_id = None
+        if hasattr(neo_obj, 'annotations'):
+            if 'channel_id' in neo_obj.annotations:
+                channel_id = neo_obj.annotations['channel_id']
+            elif 'channel_index' in neo_obj.annotations:
+                channel_id = neo_obj.annotations['channel_index']
+                neo_obj.annotate(channel_id=channel_id)
+            elif (hasattr(neo_obj, 'unit')
+                  and self._get_channel_id(neo_obj.unit) is not None):
+                channel_id = self._get_channel_id(neo_obj.unit)
         else:
-            warnings.warn('Analogsignal does not contain channel_id '
-                          'annotations, but only {}. Using channel_id '
-                          '"None"'.format(anasig.annotations))
-            channel_id = None
-        sorting_chidx = self._get_sorting_channel(anasig.segment.block)
-        channel_id_index = anasig.channel_index #TODO: How should this work
-        # if multiple chidx are attached to an analogsignal?
-        for chidx in [sorting_chidx, channel_id_index]:
+            warnings.warn('Can not determine channel id of Neo object "{}".'
+                          ' Using channel_id "None"'
+                          ''.format(neo_obj))
+        return channel_id
+
+    def _add_unit(self, block, channel_id, unit_id):
+        sorting_chidx = self._get_sorting_channel(block)
+        channel_indexes = [sorting_chidx]
+        # TODO: unit should also be added to channel index holding analogsignal
+        # if anasig.channel_index is not None:#TODO: How should this work
+        #     # if multiple chidx are attached to an analogsignal?
+        #     channel_indexes.append(anasig.channel_index)
+        for chidx in channel_indexes:
+            # if chidx is None:
+            #     continue
             for unit in chidx.units:
                 if ('unit_id' in unit.annotations
-                    and unit.annotations['unit_id'] == unit_id):
-                    raise ValueError('Unit with id {} exists already'.format(
-                            unit_id))
+                    and unit.annotations['unit_id'] == unit_id
+                    and 'channel_id' in unit.annotations
+                    and unit.annotations['channel_id'] == channel_id):
+                    raise ValueError('Unit with id {} on channel {} exists '
+                                     'already for sorting {}'
+                                     ''.format(unit_id, channel_id,
+                                               self.sorting_hash))
 
-        unit = neo.Unit(channel_id=channel_id, unit_id=unit_id)
-        for chidx in [sorting_chidx, channel_id_index]:
-            chidx.units.extend(unit)
-
+        unit = neo.Unit(channel_id=channel_id, unit_id=unit_id,
+                        sorting_hash=self.sorting_hash)
+        unit.channel_index = sorting_chidx
+        for chidx in channel_indexes:
+            chidx.units.append(unit)
         return unit
+
+    def _add_to_segment(self, anasig, spiketrains):
+        if not isinstance(anasig, list):
+            anasig.segment.spiketrains.extend(spiketrains)
+        else:
+            anasig.segment.spiketrains.append(spiketrains)
+
+    def sort_analogsignal(self, anasig):
+        raise ValueError('{} is not implemented/applicable for {}.'.format(
+                         sys._getframe().f_code.co_name, self.__class__))
+
+    def sort_segment(self, segment):
+        raise ValueError('{} is not implemented/applicable for {}.'.format(
+                         sys._getframe().f_code.co_name, self.__class__))
+
+    def sort_block(self, block):
+        raise ValueError('{} is not implemented/applicable for {}.'.format(
+                         sys._getframe().f_code.co_name, self.__class__))
+
+    def sort_spiketrain(self, spiketrain):
+        raise ValueError('{} is not implemented/applicable for {}.'.format(
+                         sys._getframe().f_code.co_name, self.__class__))
+
+    def AnnotatedSpiketrain(self, *args, **kwargs):
+        st = neo.SpikeTrain(*args, **kwargs)
+        self._annotate_with_hash(st)
+        return st
+
+    def _annotate_with_hash(self, neo_object):
+        if not isinstance(neo_object, list):
+            neo_object = [neo_object]
+        for neo_obj in neo_object:
+            if 'sorting_hash' not in neo_obj.annotations:
+                neo_obj.annotate(sorting_hash=self.sorting_hash)
+                neo_obj.annotate(sorter=self.__class__.__name__)
+            else:
+                # listify if multiple sorters (eg extractor + sorter) have
+                # been used
+                neo_obj.annotations['sorting_hash'] = \
+                    [neo_obj.annotations['sorting_hash'], self.sorting_hash]
+                neo_obj.annotations['sorter'] = \
+                    [neo_obj.annotations['sorter'], self.__class__.__name__]
+
+
+    # def annotate_hash(self,neo_class):
+    #     @wraps(neo_class)
+    #     def wrapper(*args, **kwargs):
+    #         kwargs['sorting_hash'] = self.sorting_hash
+    #         return neo_class(*args, **kwargs)
+    #     return wrapper
+
 
 class SpikeExtractor(SpikeSorter):
 
-    accepted_arguments = getRequiredArgs(spike_extraction)
+    # required_arguments = getRequiredArgs(spike_extraction)
+    arguments = getKwArgs(spike_extraction)
+    if 'signal' in arguments:
+        arguments.pop('signal')
+    accepted_arguments = arguments
 
-    def __init__(self, parameter_dict):
-        super(self.__class__,self).__init__(parameter_dict)
+    def __init__(self, **parameter_dict):
+        super(self.__class__, self).__init__(**parameter_dict)
+        pass
 
     def sort_analogsignal(self, anasig):
-        spiketrain = spike_extraction(anasig, **self.parameter_dict)
-        spiketrain.annotate(sorting_hash=self.sorting_hash)
+        parameters = copy.deepcopy(self.parameter_dict)
+        if ('filter_high' in parameters
+            and 'filter_low' in parameters):
+            low = parameters.pop('filter_low')
+            high = parameters.pop('filter_high')
+            if (low is not None) or (high is not None):
+                sig = elephant.signal_processing.butter(anasig, high, low)
+                sig.segment = anasig.segment
+                sig.channel_index = anasig.channel_index
+            else:
+                sig = anasig
+        spiketrains = spike_extraction(sig, **parameters)
+        self._annotate_with_hash(spiketrains)
 
-        unit = self._add_unit(anasig, unit_id=0)
-        unit.annotate(sorted=False)
-        unit.annotate(unit_type='mua')
+        self._add_to_segment(anasig, spiketrains)
+
+        channel_id = self._get_channel_id(anasig)
+        unit = self._add_unit(anasig.segment.block, channel_id, unit_id=0)
+        unit.annotate(sorted=False,
+                      unit_type='mua')
+        # the sorting_hash could also be annotated using the mock module in
+        # python 3 to adjust the python-neo spiketrain class
+
+        unit.spiketrains = spiketrains
+
+        unit.create_relationship()
+        return spiketrains
 
     def sort_segment(self, segment):
         for anasig in segment.analogsignals:
@@ -1035,15 +1150,236 @@ class SpikeExtractor(SpikeSorter):
         for seg in block.segments:
             self.sort_segment(seg)
 
+@requires(sklearn, 'PCA spike sorting requires sklearn')
+class KMeansSorter(SpikeSorter):
+    accepted_arguments = getKwArgs(sklearn.cluster.KMeans.__init__)
+
+    def __init__(self, **parameter_dict):
+        super(self.__class__, self).__init__(**parameter_dict)
+
+    def sort_spiketrain(self, spiketrain):
+        # put id axis first to calculate KMeans across this axis
+        # waveforms = np.swapaxes(spiketrain.waveforms, 0, -1)
+        waveforms = spiketrain.waveforms
+        if len(waveforms.shape) == 3:
+            waveforms = waveforms[:, 0, :]
+
+        # ica = FastICA(n_components=3)
+        # S_ = ica.fit_transform(waveforms.T)
+        # A_ = ica.mixing_
+
+        # pca = PCA(n_components=3).fit(waveforms)
+        m = sklearn.cluster.KMeans(**self.parameter_dict).fit(waveforms)
+        # spiketrain.annotate(cluster_id=m.labels_)
+
+        channel_id = self._get_channel_id(spiketrain)
+
+        unique, counts = np.unique(m.labels_, return_counts=True)
+        cluster_ids = dict(zip(unique, counts))
+        # sorting by size of clusters
+        cluster_ids = sorted(cluster_ids, key=cluster_ids.get, reverse=True)
+
+        for unit_id, cluster_id in enumerate(cluster_ids):
+            mask = np.where(m.labels_ == cluster_id)[0]
+            new_times = spiketrain.times[mask]
+            new_waveforms = spiketrain.waveforms[mask,:,:]
+            sorted_st = spiketrain.duplicate_with_new_data(new_times,
+                                                           spiketrain.t_start,
+                                                           spiketrain.t_stop,
+                                                           new_waveforms)
+            self._annotate_with_hash(sorted_st)
+
+            sorted_st.segment = spiketrain.segment
+            spiketrain.segment.spiketrains.append(sorted_st)
+
+            unit = self._add_unit(spiketrain.segment.block, channel_id,
+                                  unit_id=unit_id)
+            unit.annotate(sorted=True, unit_type='sua')
+
+            unit.spiketrains.append(sorted_st)
+            sorted_st.unit = unit
+
+        spiketrain.segment.block.create_relationship()
+
+    def sort_segment(self, segment):
+        for st in copy.copy(segment.spiketrains):
+            self.sort_spiketrain(st)
+
+    def sort_block(self, block):
+        for seg in copy.copy(block.segments):
+            self.sort_segment(seg)
 
 
-class MyBasicClass(object):
-    def __init__(self):
-        print 'hello basis'
+msg = 'SpikeSort must be available to extract spikes using the SpikeSortSorter.'
+@requires(spike_sort, msg)
+class SpikeSortSorter(SpikeSorter):
+    accepted_arguments =   {
+        'extraction_dict':{'sp_win_extract': [-0.5*pq.ms, 1.5*pq.ms],
+                                    'sp_win_align': [-1*pq.ms, 1*pq.ms],
+                                    'filter': [500*pq.Hz, None],
+                                    'filter_order': 4,
+                                    'threshold': 'auto',
+                                    #'remove_doubles': 0.25*pq.ms,
+                                    'edge': 'falling'},
 
-class MyClass(MyBasicClass):
-    def __init__(self):
-        super(self.__class__,self)
+        'sorting_dict':{   'method':'k-means-plus',
+                                    'num_units': 3,
+                                    'ncomps': 2}}
+
+    def __init__(self, **parameter_dict):
+        super(self.__class__, self).__init__(**parameter_dict)
+
+
+    def ss_wrap(anasig, contact=1):
+        return {'n_contacts': contact, 'data': np.asarray(anasig).reshape((1, -1)),
+                'FS': anasig.sampling_rate.rescale('Hz').magnitude}
+
+    def fetPCA(sp_waves, ncomps=2):
+            """
+            Calculate principal components (PCs).
+
+            Parameters
+            ----------
+            spikes : dict
+            ncomps : int, optional
+                number of components to retain
+
+            Returns
+            -------
+            features : dict
+            """
+
+            data = sp_waves['data']
+            n_channels = data.shape[2]
+            pcas = np.zeros((n_channels*ncomps, data.shape[1]))
+
+            for ch in range(n_channels):
+                _, _, pcas[ch::data.shape[2], ] = spike_sort.features.PCA(data[:, :, ch], ncomps)
+
+            names = ["ch.%d:PC%d" % (j+1, i+1) for i in range(ncomps) for j in range(n_channels)]
+
+            outp = {'data': pcas.T}
+            if 'is_valid' in sp_waves:
+                outp['is_valid'] = sp_waves['is_valid']
+            outp['time'] = sp_waves['time']
+            outp['FS'] = sp_waves['FS']
+            outp['names'] = names
+
+            return outp
+
+    def sort_analogsignal(self, anasig, waveforms, sort):
+        extraction_dict = self.parameter_dict['extraction_dict']
+        sorting_dict = self.parameter_dict['sorting_dict']
+        # Frequency filtering for spike detection in two steps for better filter stability
+        filtered_ana = copy.deepcopy(anasig)
+        if extraction_dict['filter'][0] is not None:
+            filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=extraction_dict['filter'][0],
+                                                             lowpass_freq=None, order=extraction_dict['filter_order'],
+                                                             filter_function='filtfilt', fs=1.0, axis=-1)
+        if extraction_dict['filter'][1] is not None:
+            filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=None,
+                                                             lowpass_freq=extraction_dict['filter'][1],
+                                                             order=extraction_dict['filter_order'],
+                                                             filter_function='filtfilt', fs=1.0, axis=-1)
+        if any(np.isnan(filtered_ana)):
+            raise ValueError('Parameters for filtering (%s, %s) yield non valid analogsignal'
+                             % (extraction_dict['filter'], extraction_dict['filter_order']))
+
+        spt = spike_sort.extract.detect_spikes(self.ss_wrap(filtered_ana), contact=0, thresh=extraction_dict['threshold'],
+                                               edge=extraction_dict['edge'])
+        spt = spike_sort.extract.align_spikes(self.ss_wrap(anasig), spt,
+                                              [i.rescale('ms').magnitude for i in extraction_dict['sp_win_align']],
+                                              type="min", contact=0, resample=1, remove=False)
+        if 'remove_doubles' in extraction_dict:
+            spt = spike_sort.core.extract.remove_doubles(spt, extraction_dict['remove_doubles'])
+
+        if waveforms or sort:
+            sp_waves = spike_sort.extract.extract_spikes(self.ss_wrap(anasig), spt,
+                                                         [i.rescale('ms').magnitude
+                                                         for i in extraction_dict['sp_win_extract']],
+                                                         contacts=0)
+
+            #  align waveform in y-axis
+            for waveform in range(sp_waves['data'].shape[1]):
+                sp_waves['data'][:, waveform, 0] -= np.mean(sp_waves['data'][:, waveform, 0])
+
+            if sort:
+                if len(spt['data']) > sorting_dict['ncomps']:
+                    features = self.fetPCA(sp_waves, ncomps=sorting_dict['ncomps'])
+                    clust_idx = spike_sort.cluster.cluster(sorting_dict['method'], features, sorting_dict['num_units'])
+                    # clustered spike times
+                    spt_clust = spike_sort.cluster.split_cells(spt, clust_idx)
+                else:
+                    warnings.warn('Spike sorting on electrode %i not possible due to low number of spikes.'
+                                  ' Perhaps the threshold for spike extraction is too conservative?'
+                                  % anasig.annotations['electrode_id'])
+                    spt_clust = {0: spt}
+                    clust_idx = np.array([0])
+
+                if waveforms and len(spt['data']) > sorting_dict['ncomps']:
+                    sp_waves = dict([(cl, {'data': sp_waves['data'][:, clust_idx == cl, :]})
+                                     for cl in np.unique(clust_idx)])
+                else:
+                    sp_waves = {0: sp_waves}
+
+
+        # Create SpikeTrain objects for each unit
+        # Unit id 0 == Mua; unit_id >0 => Sua
+        spiketrains = {i+1: j for i, j in spt_clust.iteritems()} if sort else {0: spt}
+        sp_waves = {i+1: j for i, j in sp_waves.iteritems()} if waveforms and sort else {0: sp_waves}
+        for unit_i in spiketrains:
+            sorted = sort
+            sorting_params = sorting_dict if sort else None
+            spiketimes = spiketrains[unit_i]['data'] * pq.ms + anasig.t_start
+
+            st = neo.SpikeTrain(times=spiketimes,
+                                t_start=anasig.t_start,
+                                t_stop=anasig.t_stop,
+                                sampling_rate=anasig.sampling_rate,
+                                name="Channel %i, Unit %i" % (anasig.annotations['channel_index'], unit_i),
+                                file_origin=anasig.file_origin,
+                                unit_id=unit_i,
+                                channel_id=anasig.annotations['channel_index'],
+                                electrode_id=anasig.annotations['electrode_id'],
+                                sorted=sorted,
+                                sorting_parameters=sorting_params,
+                                extraction_params=extraction_dict)
+
+            if waveforms and not any([d==0 for d in sp_waves[unit_i]['data'].shape]):
+                if sp_waves[unit_i]['data'].shape[2] != 1:
+                    raise ValueError('Unexpected shape of waveform array.')
+                # waveform dimensions [waveform_id,???,time]
+                st.waveforms = np.transpose(sp_waves[unit_i]['data'][:,:,0]) * anasig.units
+                st.waveforms = st.waveforms.reshape((st.waveforms.shape[0],1,st.waveforms.shape[1]))
+                st.left_sweep = extraction_dict['sp_win_align'][0]
+                # st.spike_duration = extraction_dict['sp_win_align'][1] - extraction_dict['sp_win_align'][0]
+                # st.right_sweep = extraction_dict['sp_win_align'][1]
+            else:
+                st.waveforms = None
+
+            # connecting unit, spiketrain and segment
+            rcgs = anasig.recordingchannel.recordingchannelgroups
+            u_annotations = {'sorted': sorted,
+                             'parameters':{ 'sorting_params': sorting_params,
+                                            'extraction_params': extraction_dict}}
+
+            new_unit = None
+            for rcg in rcgs:
+                # checking if a similar unit already exists (eg. from sorting a different segment)
+                rcg_units = [u for u in rcg.units if u.name == st.name and u.annotations == u_annotations]
+                if len(rcg_units) == 1:
+                    unit = rcg_units[0]
+                elif len(rcg_units) == 0:
+                    # Generating new unit if necessary
+                    if new_unit is None:
+                        new_unit = neo.core.Unit(name=st.name, **u_annotations)
+                    unit = new_unit
+                else:
+                    raise ValueError('%i units of name %s and annotations %s exists.'
+                                     ' This is ambiguous.' % (len(rcg_units), st.name, u_annotations))
+                rcg.units.append(unit)
+                unit.spiketrains.append(st)
+            seg.spiketrains.append(st)
 
 
 
