@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Functions to generate spike trains from analog signals,
-or to generate random spike trains.
+Functions to generate spike trains from analog signals, or to generate random
+spike trains.
 
 Some functions are based on the NeuroTools stgen module, which was mostly
 written by Eilif Muller, or from the NeuroTools signals.analogs module.
@@ -12,6 +12,7 @@ written by Eilif Muller, or from the NeuroTools signals.analogs module.
 
 from __future__ import division
 import numpy as np
+import quantities as pq
 from quantities import ms, mV, Hz, Quantity, dimensionless
 from neo import SpikeTrain
 import random
@@ -19,24 +20,25 @@ from elephant.spike_train_surrogates import dither_spike_train
 import warnings
 
 
-def spike_extraction(signal, threshold=0.0 * mV, sign='above',
+def spike_extraction(signal, threshold=0.0 * mV, sign='above', detection='peak',
                      time_stamps=None, extr_interval=(-2 * ms, 4 * ms)):
     """
-    Return the peak times for all events that cross threshold and the
-    waveforms. Usually used for extracting spikes from a membrane
+    Return a list of spiketrains containing the peak times of each channel of
+    signal. Usually used for extracting spikes from a membrane
     potential to calculate waveform properties.
-    Similar to spike_train_generation.peak_detection.
 
     Parameters
     ----------
     signal : neo AnalogSignal object
-        'signal' is an analog signal.
+        'signal' is a neo analog signal.
     threshold : A quantity, e.g. in mV
         'threshold' contains a value that must be reached for an event
         to be detected. Default: 0.0 * mV.
     sign : 'above' or 'below'
         'sign' determines whether to count thresholding crossings
         that cross above or below the threshold. Default: 'above'.
+    detection : 'peak' or 'treshold'. Extract peaks of signals or threshold
+        crossing at spike time.
     time_stamps: None, quantity array or Object with .times interface
         if 'spike_train' is a quantity array or exposes a quantity array
         exposes the .times interface, it provides the time_stamps
@@ -48,76 +50,121 @@ def spike_extraction(signal, threshold=0.0 * mV, sign='above',
         time_stamps where the waveform is extracted. The default is an
         interval of '6 ms'. Default: (-2 * ms, 4 * ms).
 
+
     Returns
     -------
-    result_st : neo SpikeTrain object
+    result_st : list of neo SpikeTrain objects
         'result_st' contains the time_stamps of each of the spikes and
-        the waveforms in result_st.waveforms.
+        the waveforms in result_st.waveforms. Waveforms of spikes that exceed
+        the intervals contain None as samples.
     """
     # Get spike time_stamps
     if time_stamps is None:
-        time_stamps = peak_detection(signal, threshold, sign=sign)
+        if detection == 'peak':
+            spiketrains = peak_detection(signal, threshold, sign=sign)
+        elif detection == 'threshold':
+            spiketrains = threshold_detection(signal, threshold, sign=sign)
+        else:
+            raise ValueError("'detection' can only be 'peak' or 'threshold', "
+                             "not {}".format(detection))
     elif hasattr(time_stamps, 'times'):
-        time_stamps = time_stamps.times
+        times = time_stamps.times
+        spiketrains = [SpikeTrain(times, units=signal.times.units,
+                                  t_start=signal.t_start, t_stop=signal.t_stop,
+                                  waveforms=np.array([]),
+                                  sampling_rate=signal.sampling_rate)]
     elif type(time_stamps) is Quantity:
+        times = time_stamps
+    else:
         raise TypeError("time_stamps must be None, a quantity array or" +
                         " expose the.times interface")
 
-    if len(time_stamps) == 0:
-        return SpikeTrain(time_stamps, units=signal.times.units,
-                          t_start=signal.t_start, t_stop=signal.t_stop,
-                          waveforms=np.array([]),
-                          sampling_rate=signal.sampling_rate)
+    waveform_extraction(signal, spiketrains, extr_interval=extr_interval)
 
-    # Unpack the extraction interval from tuple or array
-    extr_left, extr_right = extr_interval
-    if extr_left > extr_right:
-        raise ValueError("extr_interval[0] must be < extr_interval[1]")
+    return spiketrains
 
-    if any(np.diff(time_stamps) < extr_interval[1]):
-        warnings.warn("Waveforms overlap.", UserWarning)
+def waveform_extraction(signal, spiketrains, extr_interval=(-2 * ms, 4 * ms)):
+    """
+    Extract waveforms for each spiketrain by slicing the analogsignal around
+    spike times and attaching slices to the corresponding spiketrain. In case of
+     incomplete waveforms (too short analogsignal or to large extraction
+     interval) the corresponding waveform is invalidated by filling it with 0.
+     The annotations 'invalid_waveforms' contains the ids of invalidated
+     spike waveforms.
 
-    data_left = ((extr_left * signal.sampling_rate).simplified).magnitude
+    Parameters
+    ----------
+    signal : neo AnalogSignal object
+        'signal' is a neo analog signal. If the signals contains only a
+        single signal trace, then this will be duplicated for each
+        spiketrain. If the number of signal traces matches the number of
+        spiketrains a one-to-one mapping will be performed.
+    spiketrains : list of spiketrains for which to extract waveforms. The
+        waveforms
+    extr_interval: unpackable time quantities, len == 2
+        'extr_interval' specifies the time interval around the
+        time_stamps where the waveform is extracted. The default is an
+        interval of '6 ms'. Default: (-2 * ms, 4 * ms).
 
-    data_right = ((extr_right * signal.sampling_rate).simplified).magnitude
+    Returns
+    -------
+    None
+    """
+    n_anasigs = signal.shape[-1]
+    if (n_anasigs != len(spiketrains)) and (n_anasigs != 1):
+        raise ValueError('AnalogSignal needs to contain either 1 or {} '
+                         'signals, not {}'.format(len(spiketrains), n_anasigs))
 
-    data_stamps = (((time_stamps - signal.t_start) *
-                    signal.sampling_rate).simplified).magnitude
+    for st_id, st in enumerate(spiketrains):
+        if n_anasigs == 1:
+            anasig = signal
+        else:
+            anasig = signal[:, st_id]
 
-    data_stamps = data_stamps.astype(int)
+        expected_wf_length = np.ceil(((extr_interval[1] - extr_interval[0])
+                                      * anasig.sampling_rate).
+                                     rescale('dimensionless'))
+        expected_wf_length = int(expected_wf_length)
+        waveforms = []
+        invalid_waveforms = []
+        for st_id, spiketime in enumerate(st):
+            invalid_wf = False
+            t_start = spiketime + extr_interval[0]
+            t_stop = spiketime + extr_interval[1]
+            # alternative implementation instead of if-else clause here:
+            # try-catch statement, since time_slice raises ValueError
+            if t_start < anasig.t_start or t_stop > anasig.t_stop:
+                wf = np.full((expected_wf_length), 0)
+                invalid_wf = True
+            else:
+                wf = anasig.time_slice(t_start, t_stop).magnitude[:, 0]
+            if len(wf) != expected_wf_length:
+                wf = np.full((expected_wf_length), 0)
+                invalid_wf = True
+            if invalid_wf:
+                invalid_waveforms.append(st_id)
 
-    borders_left = data_stamps + data_left
+            waveforms.append(wf)
+        waveforms = np.asarray(waveforms)
 
-    borders_right = data_stamps + data_right
+        # extending dimensions for potential tetrode waveform recordings
 
-    borders = np.dstack((borders_left, borders_right)).flatten()
+        if len(waveforms) == 0:
+            waveforms = np.array([]).reshape((0,0))
+        waveforms = waveforms[:, np.newaxis, :]
 
-    waveforms = np.array(
-                np.split(np.array(signal), borders.astype(int))[1::2]) * signal.units
+        waveforms = np.array(waveforms) * anasig.units
 
-    # len(np.shape(waveforms)) == 1 if waveforms do not have the same width.
-    # this can occur when extr_interval indexes beyond the signal.
-    # Workaround: delete spikes shorter than the maximum length with
-    if len(np.shape(waveforms)) == 1:
-        max_len = (np.array([len(x) for x in waveforms])).max()
-        to_delete = np.array([idx for idx, x in enumerate(waveforms)
-                             if len(x) < max_len])
-        waveforms = np.delete(waveforms, to_delete, axis=0)
-        waveforms = np.array([x for x in waveforms])
-        warnings.warn("Waveforms " +
-                      ("{:d}, " * len(to_delete)).format(*to_delete) +
-                      "exceeded signal and had to be deleted. " +
-                      "Change extr_interval to keep.")
+        st.waveforms = waveforms
+        st.annotate(invalid_waveforms=invalid_waveforms)
+        st.left_sweep = extr_interval[0]
 
-    waveforms = waveforms[:, np.newaxis, :]
-
-    return SpikeTrain(time_stamps, units=signal.times.units,
-                      t_start=signal.t_start, t_stop=signal.t_stop,
-                      sampling_rate=signal.sampling_rate, waveforms=waveforms,
-                      left_sweep=extr_left)
+        if (np.diff(st.magnitude, axis=0) * st.units <
+                    extr_interval[0] - extr_interval[1]).any():
+            warnings.warn("Waveforms overlap.", UserWarning)
 
 
-def threshold_detection(signal, threshold=0.0 * mV, sign='above'):
+def threshold_detection(signal, threshold=1, sign='above'):
     """
     Returns the times when the analog signal crosses a threshold.
     Usually used for extracting spike times from a membrane potential.
@@ -127,51 +174,72 @@ def threshold_detection(signal, threshold=0.0 * mV, sign='above'):
     ----------
     signal : neo AnalogSignal object
         'signal' is an analog signal.
-    threshold : A quantity, e.g. in mV
+    threshold : float, integer or quantity, e.g. in mV
         'threshold' contains a value that must be reached
-        for an event to be detected. Default: 0.0 * mV.
+        for an event to be detected. Default: 1
     sign : 'above' or 'below'
         'sign' determines whether to count thresholding crossings
         that cross above or below the threshold.
-    format : None or 'raw'
-        Whether to return as SpikeTrain (None)
-        or as a plain array of times ('raw').
 
     Returns
     -------
-    result_st : neo SpikeTrain object
-        'result_st' contains the spike times of each of the events (spikes)
-        extracted from the signal.
+    result_sts : list of neo SpikeTrain objects
+        Each spiketrain in 'result_st' contains the spike times of each of the
+        events (spikes) extracted from the corresponding signal trace.
+        The ordering of the spiketrains corresponds to the signal traces in
+        the analogsignal.
     """
 
     assert threshold is not None, "A threshold must be provided"
 
-    if sign is 'above':
-        cutout = np.where(signal > threshold)[0]
-    elif sign in 'below':
-        cutout = np.where(signal < threshold)[0]
-
-    if len(cutout) <= 0:
-        events = np.zeros(0)
+    if isinstance(threshold, Quantity):
+        signal.rescale(threshold.units)
+    elif isinstance(threshold, (int, float)):
+        threshold = np.std(signal, axis=0)[np.newaxis, :] * threshold
     else:
-        take = np.where(np.diff(cutout) > 1)[0] + 1
-        take = np.append(0, take)
+        raise ValueError('Threshold needs to be number or quantity, not of '
+                         'type {}'.format(type(threshold)))
 
-        time = signal.times
-        events = time[cutout][take]
+    if sign is 'above':
+        # artificially swapping signal axis to directly get results sorted in
+        #  second (channel_id) dimension and not in time dimension
+        cutout = np.asarray(np.where(signal.T > threshold.T))[::-1]
+    elif sign in 'below':
+        cutout = np.asarray(np.where(signal.T < threshold.T))[::-1]
 
-    events_base = events.base
-    if events_base is None:
-        # This occurs in some Python 3 builds due to some
-        # bug in quantities.
-        events_base = np.array([event.base for event in events])  # Workaround
+    result_sts = []
 
-    result_st = SpikeTrain(events_base, units=signal.times.units,
-                           t_start=signal.t_start, t_stop=signal.t_stop)
-    return result_st
+    times = signal.times
+    borders = _get_border_ids_multi_channel(cutout[0],
+                                            channel_ids=cutout[1],
+                                            sample_scale=2)
+
+    # generating one spiketrain per channel
+    for channel_id in range(signal.shape[-1]):
+        if channel_id not in borders:
+            events_base = []
+        else:
+            left_borders = borders[channel_id][0::2]
+
+            events = times[left_borders]
+
+            events_base = events.base
+            if events_base is None:
+                # This occurs in some Python 3 builds due to some
+                # bug in quantities.
+                events_base = np.array(
+                        [event.base for event in events])  # Workaround
+
+        result_sts.append(SpikeTrain(events_base,
+                                     units=signal.times.units,
+                                     t_start=signal.t_start,
+                                     t_stop=signal.t_stop,
+                                     sampling_rate=signal.sampling_rate))
+
+    return result_sts
 
 
-def peak_detection(signal, threshold=0.0 * mV, sign='above', format=None):
+def peak_detection(signal, threshold=0.0 * mV, sign='above'):
     """
     Return the peak times for all events that cross threshold.
     Usually used for extracting spike times from a membrane potential.
@@ -187,70 +255,153 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above', format=None):
     sign : 'above' or 'below'
         'sign' determines whether to count thresholding crossings that
         cross above or below the threshold. Default: 'above'.
-    format : None or 'raw'
-        Whether to return as SpikeTrain (None) or as a plain array
-        of times ('raw'). Default: None.
 
     Returns
     -------
-    result_st : neo SpikeTrain object
-        'result_st' contains the spike times of each of the events
-        (spikes) extracted from the signal.
+    result_sts : list of neo SpikeTrain objects
+        Each spiketrain in 'result_st' contains the spike times of each of the
+        events (spikes) extracted from the corresponding signal trace.
+        The ordering of the spiketrains corresponds to the signal traces in
+        the analogsignal.
     """
     assert threshold is not None, "A threshold must be provided"
 
+    if isinstance(threshold, Quantity):
+        signal.rescale(threshold.units)
+    elif isinstance(threshold, (int, float)):
+        threshold = np.std(signal, axis=0)[np.newaxis, :] * threshold
+    else:
+        raise ValueError('Threshold needs to be number or quantity, not of '
+                         'type {}'.format(type(threshold)))
+
     if sign is 'above':
-        cutout = np.where(signal > threshold)[0]
-        peak_func = np.argmax
+        # artificially swapping signal axis to directly get results sorted in
+        #  second (channel_id) dimension and not in time dimension
+        cutout = np.asarray(np.where(signal.T > threshold.T))[::-1]
+        peak_func = lambda x: np.argmax(x, axis=0)
     elif sign in 'below':
-        cutout = np.where(signal < threshold)[0]
-        peak_func = np.argmin
+        cutout = np.asarray(np.where(signal.T < threshold.T))[::-1]
+        peak_func = lambda x: np.argmin(x, axis=0)
     else:
         raise ValueError("sign must be 'above' or 'below'")
 
-    if len(cutout) <= 0:
-        events_base = np.zeros(0)
+    result_sts = []
+
+    border_set_ids = _get_border_ids_multi_channel(cutout[0],
+                                                   cutout[1],
+                                                   sample_scale=2)
+    for channel_id in range(signal.shape[-1]):
+        if channel_id not in border_set_ids:
+            events_base = []
+        else:
+            true_borders = border_set_ids[channel_id]
+
+            split_signal = np.split(signal[:, channel_id], true_borders)[1::2]
+
+            maxima_idc_split = np.array([peak_func(x) for x in split_signal])
+
+            max_idc = maxima_idc_split + true_borders[0::2, np.newaxis]
+
+            events = signal.times[max_idc]
+            # spike trains are 1D in contrast to analogsignals
+            events = events.flatten()
+            events_base = events.base
+
+            if events_base is None:
+                # This occurs in some Python 3 builds due to some
+                # bug in quantities.
+                events_base = np.array(
+                        [event.base for event in events])  # Workaround
+
+        result_sts.append(
+                SpikeTrain(events_base,
+                           units=signal.times.units,
+                           t_start=signal.t_start,
+                           t_stop=signal.t_stop,
+                           sampling_rate=signal.sampling_rate))
+
+    return result_sts
+
+
+def _get_border_ids_multi_channel(cutout_times, channel_ids=None,
+                                  sample_scale=1):
+    '''
+    Get border ids of sequences, which only contain gaps smaller or equal to
+    the ignored_id_gap_size.
+    IMPORTANT: Sequences of length 1 will be ignored!
+
+    Parameters
+    ----------
+    cutout_times : array containing ids.
+    cutout_channels : None or array of same length as cutout_times,
+        defining the corresponding recording channels after which to
+        sort the ids. Default: None
+    sample_scale : int, scale on which gaps in subsequent ids will be
+        ignored
+
+    Returns
+    -------
+    dictionary containing the border ids (value) for each channel_id (key)
+
+    '''
+
+    # generating channel array as if all timestamps belong to channel 0
+    if channel_ids is None:
+        channels = np.full(cutout_times.shape, 0)
     else:
-        # Select thr crossings lasting at least 2 dtps, np.diff(cutout) > 2
-        # This avoids empty slices
-        border_start = np.where(np.diff(cutout) > 1)[0]
-        border_end = border_start + 1
-        borders = np.concatenate((border_start, border_end))
-        borders = np.append(0, borders)
-        borders = np.append(borders, len(cutout)-1)
-        borders = np.sort(borders)
-        true_borders = cutout[borders]
-        right_borders = true_borders[1::2] + 1
-        true_borders = np.sort(np.append(true_borders[0::2], right_borders))
+        channels = channel_ids
 
-        # Workaround for bug that occurs when signal goes below thr for 1 dtp,
-        # Workaround eliminates empy slices from np. split
-        backward_mask = np.absolute(np.ediff1d(true_borders, to_begin=1)) > 0
-        forward_mask = np.absolute(np.ediff1d(true_borders[::-1],
-                                              to_begin=1)[::-1]) > 0
-        true_borders = true_borders[backward_mask * forward_mask]
-        split_signal = np.split(np.array(signal), true_borders)[1::2]
+    result = {}
+    for channel_id in np.sort(np.unique(channels)):
+        channel_condition = (channels == channel_id)
 
-        maxima_idc_split = np.array([peak_func(x) for x in split_signal])
+        cutout_times_i = cutout_times[channel_condition]
+        border_ids_i = _get_border_ids(cutout_times_i,
+                                       sample_scale=sample_scale)
+        if channel_ids is None:
+            channel_id = None
+        result[channel_id] = border_ids_i
+    return result
 
-        max_idc = maxima_idc_split + true_borders[0::2]
 
-        events = signal.times[max_idc]
-        events_base = events.base
+def _get_border_ids(cutout, sample_scale=1):
+    '''
+    Get border ids of sequences, which only contain gaps smaller or equal to
+    the ignored_id_gap_size.
+    IMPORTANT: Sequences of length 1 will be ignored!
 
-    if events_base is None:
-        # This occurs in some Python 3 builds due to some
-        # bug in quantities.
-        events_base = np.array([event.base for event in events])  # Workaround
-    if format is None:
-        result_st = SpikeTrain(events_base, units=signal.times.units,
-                               t_start=signal.t_start, t_stop=signal.t_stop)
-    elif 'raw':
-        result_st = events_base
-    else:
-        raise ValueError("Format argument must be None or 'raw'")
+    Parameters
+    ----------
+    cutout : array containing ids.
+    sample_scale : int, scale on which gaps in subsequent ids will be
+        ignored
 
-    return result_st
+    Returns
+    -------
+    array containing the border ids
+    '''
+    if len(cutout.shape) > 1:
+        raise ValueError('_get_border_ids can not handle multi dimensional '
+                         'cutout segments. '
+                         'Please use "_get_border_ids_multi_channel" instead.')
+    elif len(cutout) <= 0:
+        return np.array([])
+
+    # Select threshold crossings ignoring gaps up to the range of sample_scale
+    border_start = np.where(np.diff(cutout) > sample_scale)[0]
+    border_end = border_start + 1
+    # storing border values as
+    # [segment1_start, segment1_stop, segment2_start, segment2_stop, ...]
+    borders = np.insert(border_start, np.arange(len(border_end)) + 1,
+                        border_end)
+    # extending to border ids to full range of cutout to cover all segments
+    borders = np.concatenate(([0], borders, [len(cutout) - 1]))
+    true_borders = cutout[borders]
+    # shift right borders by 1, because slicing does not include element at
+    # stop id
+    right_borders = true_borders[1::2] + 1
+    true_borders = np.sort(np.append(true_borders[0::2], right_borders))
+    return true_borders
 
 
 def _homogeneous_process(interval_generator, args, mean_rate, t_start, t_stop,
@@ -260,6 +411,7 @@ def _homogeneous_process(interval_generator, args, mean_rate, t_start, t_stop,
     generated by the function `interval_generator` with the given rate,
     starting at time `t_start` and stopping `time t_stop`.
     """
+
     def rescale(x):
         return (x / mean_rate.units).rescale(t_stop.units)
 
@@ -282,8 +434,8 @@ def _homogeneous_process(interval_generator, args, mean_rate, t_start, t_stop,
             t_last = t_last + rescale(interval_generator(*args, size=1))[0]
         # np.concatenate does not conserve units
         spikes = Quantity(
-            np.concatenate(
-                (spikes, extra_spikes)).magnitude, units=spikes.units)
+                np.concatenate(
+                        (spikes, extra_spikes)).magnitude, units=spikes.units)
     else:
         spikes = spikes[:i]
 
@@ -291,7 +443,7 @@ def _homogeneous_process(interval_generator, args, mean_rate, t_start, t_stop,
         spikes = spikes.magnitude
     else:
         spikes = SpikeTrain(
-            spikes, t_start=t_start, t_stop=t_stop, units=spikes.units)
+                spikes, t_start=t_start, t_stop=t_stop, units=spikes.units)
 
     return spikes
 
@@ -334,8 +486,8 @@ def homogeneous_poisson_process(rate, t_start=0.0 * ms, t_stop=1000.0 * ms,
     rate = rate.rescale((1 / t_start).units)
     mean_interval = 1 / rate.magnitude
     return _homogeneous_process(
-        np.random.exponential, (mean_interval,), rate, t_start, t_stop,
-        as_array)
+            np.random.exponential, (mean_interval,), rate, t_start, t_stop,
+            as_array)
 
 
 def homogeneous_gamma_process(a, b, t_start=0.0 * ms, t_stop=1000.0 * ms,
@@ -379,7 +531,8 @@ def homogeneous_gamma_process(a, b, t_start=0.0 * ms, t_stop=1000.0 * ms,
     b = b.rescale((1 / t_start).units).simplified
     rate = b / a
     k, theta = a, (1 / b.magnitude)
-    return _homogeneous_process(np.random.gamma, (k, theta), rate, t_start, t_stop, as_array)
+    return _homogeneous_process(np.random.gamma, (k, theta), rate, t_start,
+                                t_stop, as_array)
 
 
 def _n_poisson(rate, t_stop, t_start=0.0 * ms, n=1):
@@ -425,17 +578,17 @@ def _n_poisson(rate, t_stop, t_start=0.0 * ms, n=1):
     # Check t_start < t_stop and create their strip dimensions
     if not t_start < t_stop:
         raise ValueError(
-            't_start (=%s) must be < t_stop (=%s)' % (t_start, t_stop))
+                't_start (={}) must be < t_stop (={})'.format(t_start, t_stop))
 
     # Set number n of output spike trains (specified or set to len(rate))
     if not (type(n) == int and n > 0):
-        raise ValueError('n (=%s) must be a positive integer' % str(n))
+        raise ValueError('n (={}) must be a positive integer'.format(str(n)))
     rate_dl = rate.simplified.magnitude.flatten()
 
     # Check rate input parameter
     if len(rate_dl) == 1:
         if rate_dl < 0:
-            raise ValueError('rate (=%s) must be non-negative.' % rate)
+            raise ValueError('rate (={}) must be non-negative.'.format(rate))
         rates = np.array([rate_dl] * n)
     else:
         rates = rate_dl.flatten()
@@ -519,19 +672,12 @@ def single_interaction_process(
     ----------
     [1] Kuhn, Aertsen, Rotter (2003) Neural Comput 15(1):67-101
 
-    EXAMPLE:
-
-    >>> import quantities as qt
-    >>> import jelephant.core.stocmod as sm
-    >>> sip, coinc = sm.sip_poisson(n=10, n=0, t_stop=1*qt.sec, \
-            rate=20*qt.Hz,  rate_c=4, return_coinc = True)
-
     *************************************************************************
     """
 
     # Check if n is a positive integer
     if not (isinstance(n, int) and n > 0):
-        raise ValueError('n (=%s) must be a positive integer' % str(n))
+        raise ValueError('n (={}) must be a positive integer'.format(str(n)))
 
     # Assign time unit to jitter, or check that its existing unit is a time
     # unit
@@ -542,9 +688,9 @@ def single_interaction_process(
     if rate.ndim == 0:
         if rate < 0 * Hz:
             raise ValueError(
-                'rate (=%s) must be non-negative.' % str(rate))
+                    'rate (={}) must be non-negative.'.format(str(rate)))
         rates_b = np.array(
-            [rate.magnitude for _ in range(n)]) * rate.units
+                [rate.magnitude for _ in range(n)]) * rate.units
     else:
         rates_b = np.array(rate).flatten() * rate.units
         if not all(rates_b >= 0. * Hz):
@@ -557,13 +703,14 @@ def single_interaction_process(
     # Check min_delay < 1./rate_c
     if not (rate_c == 0 * Hz or min_delay < 1. / rate_c):
         raise ValueError(
-            "'*min_delay* (%s) must be lower than 1/*rate_c* (%s)." %
-            (str(min_delay), str((1. / rate_c).rescale(min_delay.units))))
+                "'*min_delay* ({}) must be lower than 1/*rate_c* ({})."
+                    .format(str(min_delay),
+                            str((1. / rate_c).rescale(min_delay.units))))
 
     # Generate the n Poisson processes there are the basis for the SIP
     # (coincidences still lacking)
     embedded_poisson_trains = _n_poisson(
-        rate=rates_b - rate_c, t_stop=t_stop, t_start=t_start)
+            rate=rates_b - rate_c, t_stop=t_stop, t_start=t_start)
     # Convert the trains from neo SpikeTrain objects to simpler Quantity
     # objects
     embedded_poisson_trains = [
@@ -576,13 +723,14 @@ def single_interaction_process(
         Nr_coinc = int(((t_stop - t_start) * rate_c).rescale(dimensionless))
         while True:
             coinc_times = t_start + \
-                np.sort(np.random.random(Nr_coinc)) * (t_stop - t_start)
+                          np.sort(np.random.random(Nr_coinc)) * (
+                              t_stop - t_start)
             if len(coinc_times) < 2 or min(np.diff(coinc_times)) >= min_delay:
                 break
     elif coincidences == 'stochastic':
         while True:
             coinc_times = homogeneous_poisson_process(
-                rate=rate_c, t_stop=t_stop, t_start=t_start)
+                    rate=rate_c, t_stop=t_stop, t_start=t_start)
             if len(coinc_times) < 2 or min(np.diff(coinc_times)) >= min_delay:
                 break
         # Convert coinc_times from a neo SpikeTrain object to a Quantity object
@@ -597,11 +745,12 @@ def single_interaction_process(
     # Replicate coinc_times n times, and jitter each event in each array by
     # +/- jitter (within (t_start, t_stop))
     embedded_coinc = coinc_times + \
-        np.random.random(
-            (len(rates_b), len(coinc_times))) * 2 * jitter - jitter
+                     np.random.random(
+                             (len(rates_b),
+                              len(coinc_times))) * 2 * jitter - jitter
     embedded_coinc = embedded_coinc + \
-        (t_start - embedded_coinc) * (embedded_coinc < t_start) - \
-        (t_stop - embedded_coinc) * (embedded_coinc > t_stop)
+                     (t_start - embedded_coinc) * (embedded_coinc < t_start) - \
+                     (t_stop - embedded_coinc) * (embedded_coinc > t_stop)
 
     # Inject coincident events into the n SIP processes generated above, and
     # merge with the n independent processes
@@ -668,10 +817,10 @@ def _pool_two_spiketrains(a, b, extremes='inner'):
 
     else:
         raise ValueError(
-            'extremes (%s) can only be "inner" or "outer"' % extremes)
+                'extremes ({}) can only be "inner" or "outer"'.format(extremes))
     pooled_train = SpikeTrain(
-        times=sorted(times.magnitude), units=unit, t_start=t_start,
-        t_stop=t_stop)
+            times=sorted(times.magnitude), units=unit, t_start=t_start,
+            t_stop=t_stop)
     return pooled_train
 
 
@@ -701,12 +850,12 @@ def _pool_spiketrains(trains, extremes='inner'):
     merge_trains = trains[0]
     for t in trains[1:]:
         merge_trains = _pool_two_spiketrains(
-            merge_trains, t, extremes=extremes)
+                merge_trains, t, extremes=extremes)
     t_start, t_stop = merge_trains.t_start, merge_trains.t_stop
     merge_trains = sorted(merge_trains)
     merge_trains = np.squeeze(merge_trains)
     merge_trains = SpikeTrain(
-        merge_trains, t_stop=t_stop, t_start=t_start, units=trains[0].units)
+            merge_trains, t_stop=t_stop, t_start=t_start, units=trains[0].units)
     return merge_trains
 
 
@@ -766,7 +915,7 @@ def _mother_proc_cpp_stat(A, t_stop, rate, t_start=0 * ms):
     exp_A = np.dot(A, range(N + 1))  # expected value of a
     exp_mother = (N * rate) / float(exp_A)  # rate of the mother process
     return homogeneous_poisson_process(
-        rate=exp_mother, t_stop=t_stop, t_start=t_start)
+            rate=exp_mother, t_stop=t_stop, t_start=t_start)
 
 
 def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
@@ -796,7 +945,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
 
     # Generate mother process and associated spike labels
     mother = _mother_proc_cpp_stat(
-        A=A, t_stop=t_stop, rate=rate, t_start=t_start)
+            A=A, t_stop=t_stop, rate=rate, t_start=t_start)
     labels = _sample_int_from_pdf(A, len(mother))
 
     N = len(A) - 1  # Number of trains in output
@@ -825,7 +974,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * ms):
                 times[train_id].append(t)
 
     trains = [SpikeTrain(
-        times=t, t_start=t_start, t_stop=t_stop) for t in times]
+            times=t, t_start=t_start, t_stop=t_stop) for t in times]
 
     return trains
 
@@ -937,10 +1086,12 @@ def compound_poisson_process(rate, A, t_stop, shift=None, t_start=0 * ms):
     # Check A is a probability distribution (it sums to 1 and is positive)
     if abs(sum(A) - 1) > np.finfo('float').eps:
         raise ValueError(
-            'A must be a probability vector, sum(A)= %f !=1' % (sum(A)))
+                'A must be a probability vector, sum(A)= {} !=1'.format((sum(
+                        A))))
     if any([a < 0 for a in A]):
         raise ValueError(
-            'A must be a probability vector, all the elements of must be >0')
+                'A must be a probability vector, all the elements of must be '
+                '>0')
     # Check that the rate is not an empty Quantity
     if rate.ndim == 1 and len(rate.magnitude) == 0:
         raise ValueError('Rate is an empty Quantity array')
@@ -965,6 +1116,7 @@ def compound_poisson_process(rate, A, t_stop, shift=None, t_start=0 * ms):
                 dither_spike_train(cp, shift=shift, edges=True)[0]
                 for cp in cpp]
             return cpp
+
 
 # Alias for the compound poisson process
 cpp = compound_poisson_process
