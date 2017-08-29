@@ -9,6 +9,7 @@ import copy
 import sklearn.cluster
 # from sklearn.decomposition import PCA
 # from sklearn.cluster import KMeans
+import collections
 import quantities as pq
 import os.path
 from os import linesep as sep
@@ -952,7 +953,6 @@ class SpikeSorter(object):
             """
 
             if isinstance(o, (set,tuple,list)):
-
                 return tuple([_make_hash(e) for e in o])
 
             elif isinstance(o, pq.Quantity):
@@ -962,10 +962,12 @@ class SpikeSorter(object):
                 new_o = copy.deepcopy(o)
                 for k, v in new_o.items():
                     new_o[k] = _make_hash(v)
-                return hash(str(sorted(new_o)))
-                # old version below yields different hashed in different
-                # interpreter instances.
-                # return hash(tuple(frozenset(sorted(new_o.items()))))
+                ordered_obj = collections.OrderedDict(sorted(new_o.items()))
+                return hash(str(ordered_obj))
+            # set hash of None explicitly since differs between python
+            # instances
+            elif o is None:
+                return -1
             else:
                 return hash(o)
 
@@ -1115,6 +1117,7 @@ class SpikeExtractor(SpikeSorter):
 
     def sort_analogsignal(self, anasig):
         parameters = copy.deepcopy(self.parameter_dict)
+        sig = anasig
         if ('filter_high' in parameters
             and 'filter_low' in parameters):
             low = parameters.pop('filter_low')
@@ -1123,8 +1126,6 @@ class SpikeExtractor(SpikeSorter):
                 sig = elephant.signal_processing.butter(anasig, high, low)
                 sig.segment = anasig.segment
                 sig.channel_index = anasig.channel_index
-            else:
-                sig = anasig
         spiketrains = spike_extraction(sig, **parameters)
         self._annotate_with_hash(spiketrains)
 
@@ -1162,7 +1163,20 @@ class KMeansSorter(SpikeSorter):
         # waveforms = np.swapaxes(spiketrain.waveforms, 0, -1)
         waveforms = spiketrain.waveforms
         if len(waveforms.shape) == 3:
-            waveforms = waveforms[:, 0, :]
+            assert waveforms.shape[1] in [0, 1]
+            waveforms = waveforms.reshape((waveforms.shape[0],
+                                           waveforms.shape[2]))
+
+        if waveforms.shape[0] == 0:
+            print('No waveforms present to be sorted.')
+            channel_id = self._get_channel_id(spiketrain)
+            unit = self._add_unit(spiketrain.segment.block, channel_id,
+                                  unit_id=None)
+            unit.annotate(sorted=True, unit_type='sua')
+
+            unit.spiketrains.append(spiketrain)
+            spiketrain.unit = unit
+            return None
 
         # ica = FastICA(n_components=3)
         # S_ = ica.fit_transform(waveforms.T)
@@ -1171,16 +1185,17 @@ class KMeansSorter(SpikeSorter):
         # pca = PCA(n_components=3).fit(waveforms)
         m = sklearn.cluster.KMeans(**self.parameter_dict).fit(waveforms)
         # spiketrain.annotate(cluster_id=m.labels_)
+        labels = m.labels_
 
         channel_id = self._get_channel_id(spiketrain)
 
-        unique, counts = np.unique(m.labels_, return_counts=True)
+        unique, counts = np.unique(labels, return_counts=True)
         cluster_ids = dict(zip(unique, counts))
         # sorting by size of clusters
         cluster_ids = sorted(cluster_ids, key=cluster_ids.get, reverse=True)
 
         for unit_id, cluster_id in enumerate(cluster_ids):
-            mask = np.where(m.labels_ == cluster_id)[0]
+            mask = np.where(labels == cluster_id)[0]
             new_times = spiketrain.times[mask]
             new_waveforms = spiketrain.waveforms[mask,:,:]
             sorted_st = spiketrain.duplicate_with_new_data(new_times,
