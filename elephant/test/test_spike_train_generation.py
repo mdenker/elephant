@@ -10,6 +10,7 @@ from __future__ import division
 import unittest
 import os
 import warnings
+import math
 
 import neo
 import numpy as np
@@ -180,6 +181,7 @@ class AnalogSignalSpikeExtractionTestCase(unittest.TestCase):
         # due to the large waveform window, this will try to extract a
         # waveform where no analogsignal is present
         stgen.spike_extraction(self.vm, extr_interval=(-50 * ms, 50 * ms))
+
 
 class HomogeneousPoissonProcessTestCase(unittest.TestCase):
     def setUp(self):
