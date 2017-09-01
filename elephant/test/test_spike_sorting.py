@@ -173,6 +173,21 @@ class KMeansSorterTestCase(SpikeSorterTestCase, unittest.TestCase):
             self.assertEqual(len(u.spiketrains), 1)
             self.assertTrue(u.spiketrains[0].unit is u)
 
+# class SpikeSortSorterTestCase(SpikeSorterTestCase, unittest.TestCase):
+#
+#     def setUp(self):
+#         super(SpikeSortSorterTestCase, self).setUp()
+#
+#     def test_spiketrains_exist(self):
+#         self.default_sorting()
+#
+#     def test_spiketrain_relations(self):
+#         self.default_sorting()
+#
+#     def default_sorting(self):
+#         sorter = SpikeSortSorter()
+#         sorter.sort_analogsignal(self.asiga0)
+
 
 
 
