@@ -992,15 +992,16 @@ class SpikeSorter(object):
     def _get_sorting_channel(self, block):
         chidx = None
         for chidx_i in block.channel_indexes:
-            if ('sorting_hash' in chidx_i.annotations
-                and chidx_i.annotations['sorting_hash'] == self.sorting_hash):
+            if ('sorting_hash' in chidx_i.annotations and
+                        chidx_i.annotations['sorting_hash'] == self.sorting_hash):
                 chidx = chidx_i
                 break
 
         if chidx is None:
             chidx = neo.ChannelIndex([0], #TODO: what index should be used here?
                                      name='spike sorting channel_index',
-                                     sorting_hash=self.sorting_hash)
+                                     sorting_hash=self.sorting_hash,
+                                     sorter=type(self).__name__)
             block.channel_indexes.append(chidx)
             chidx.block = block
             block.create_relationship()
