@@ -234,7 +234,9 @@ def threshold_detection(signal, threshold=1, sign='above'):
                                      units=signal.times.units,
                                      t_start=signal.t_start,
                                      t_stop=signal.t_stop,
-                                     sampling_rate=signal.sampling_rate))
+                                     sampling_rate=signal.sampling_rate,
+                                     threshold_value=threshold[channel_id]))
+    print threshold
 
     return result_sts
 
@@ -318,7 +320,8 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above'):
                            units=signal.times.units,
                            t_start=signal.t_start,
                            t_stop=signal.t_stop,
-                           sampling_rate=signal.sampling_rate))
+                           sampling_rate=signal.sampling_rate,
+                           threshold_value=threshold[channel_id]))
 
     return result_sts
 
