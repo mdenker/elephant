@@ -163,6 +163,27 @@ def waveform_extraction(signal, spiketrains, extr_interval=(-2 * ms, 4 * ms)):
                     extr_interval[0] - extr_interval[1]).any():
             warnings.warn("Waveforms overlap.", UserWarning)
 
+def _get_threshold_and_cutouts(signal, threshold, sign):
+    assert threshold is not None, "A threshold must be provided"
+
+    if isinstance(threshold, (int, float)):
+        threshold = np.std(signal, axis=0) * threshold
+    elif isinstance(threshold, np.ndarray) and (threshold.shape == () or
+                                                threshold.shape[0] == 1):
+        threshold = threshold.repeat(signal.shape[-1])
+    if isinstance(threshold, Quantity):
+        signal = signal.rescale(threshold.units)
+
+    if sign is 'above':
+        cutout = np.asarray(np.where(signal > threshold))
+    elif sign in 'below':
+        cutout = np.asarray(np.where(signal < threshold))
+    else:
+        raise ValueError("sign must be 'above' or 'below'")
+
+    return threshold, cutout[0], cutout[1]
+
+
 
 def threshold_detection(signal, threshold=1, sign='above'):
     """
@@ -190,36 +211,21 @@ def threshold_detection(signal, threshold=1, sign='above'):
         the analogsignal.
     """
 
-    assert threshold is not None, "A threshold must be provided"
+    threshold, time_ids, channel_ids = _get_threshold_and_cutouts(signal,
+                                                                     threshold,
+                                                                     sign)
 
-    if isinstance(threshold, Quantity):
-        signal.rescale(threshold.units)
-    elif isinstance(threshold, (int, float)):
-        threshold = np.std(signal, axis=0)[np.newaxis, :] * threshold
-    else:
-        raise ValueError('Threshold needs to be number or quantity, not of '
-                         'type {}'.format(type(threshold)))
-
-    if sign is 'above':
-        # artificially swapping signal axis to directly get results sorted in
-        #  second (channel_id) dimension and not in time dimension
-        cutout = np.asarray(np.where(signal.T > threshold.T))[::-1]
-    elif sign in 'below':
-        cutout = np.asarray(np.where(signal.T < threshold.T))[::-1]
-
-    result_sts = []
-
-    times = signal.times
-    borders = _get_border_ids_multi_channel(cutout[0],
-                                            channel_ids=cutout[1],
+    borders = _get_border_ids_multi_channel(time_ids=time_ids,
+                                            channel_ids=channel_ids,
                                             sample_scale=2)
-
+    result_sts = []
+    times = signal.times
     # generating one spiketrain per channel
-    for channel_id in range(signal.shape[-1]):
-        if channel_id not in borders:
+    for chid in range(signal.shape[-1]):
+        if chid not in borders:
             events_base = []
         else:
-            left_borders = borders[channel_id][0::2]
+            left_borders = borders[chid][0::2]
 
             events = times[left_borders]
 
@@ -235,9 +241,7 @@ def threshold_detection(signal, threshold=1, sign='above'):
                                      t_start=signal.t_start,
                                      t_stop=signal.t_stop,
                                      sampling_rate=signal.sampling_rate,
-                                     threshold_value=threshold[channel_id]))
-    print threshold
-
+                                     threshold_value=threshold[chid]))
     return result_sts
 
 
@@ -266,32 +270,22 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above'):
         The ordering of the spiketrains corresponds to the signal traces in
         the analogsignal.
     """
-    assert threshold is not None, "A threshold must be provided"
 
-    if isinstance(threshold, Quantity):
-        signal.rescale(threshold.units)
-    elif isinstance(threshold, (int, float)):
-        threshold = np.std(signal, axis=0)[np.newaxis, :] * threshold
-    else:
-        raise ValueError('Threshold needs to be number or quantity, not of '
-                         'type {}'.format(type(threshold)))
+    threshold, time_ids, channel_ids = _get_threshold_and_cutouts(signal,
+                                                                     threshold,
+                                                                     sign)
+
+    border_set_ids = _get_border_ids_multi_channel(time_ids=time_ids,
+                                                   channel_ids=channel_ids,
+                                                   sample_scale=2)
 
     if sign is 'above':
-        # artificially swapping signal axis to directly get results sorted in
-        #  second (channel_id) dimension and not in time dimension
-        cutout = np.asarray(np.where(signal.T > threshold.T))[::-1]
         peak_func = lambda x: np.argmax(x, axis=0)
     elif sign in 'below':
-        cutout = np.asarray(np.where(signal.T < threshold.T))[::-1]
         peak_func = lambda x: np.argmin(x, axis=0)
-    else:
-        raise ValueError("sign must be 'above' or 'below'")
+
 
     result_sts = []
-
-    border_set_ids = _get_border_ids_multi_channel(cutout[0],
-                                                   cutout[1],
-                                                   sample_scale=2)
     for channel_id in range(signal.shape[-1]):
         if channel_id not in border_set_ids:
             events_base = []
@@ -326,7 +320,7 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above'):
     return result_sts
 
 
-def _get_border_ids_multi_channel(cutout_times, channel_ids=None,
+def _get_border_ids_multi_channel(time_ids, channel_ids=None,
                                   sample_scale=1):
     '''
     Get border ids of sequences, which only contain gaps smaller or equal to
@@ -335,8 +329,8 @@ def _get_border_ids_multi_channel(cutout_times, channel_ids=None,
 
     Parameters
     ----------
-    cutout_times : array containing ids.
-    cutout_channels : None or array of same length as cutout_times,
+    time_ids : array containing ids.
+    cutout_channels : None or array of same length as time_ids,
         defining the corresponding recording channels after which to
         sort the ids. Default: None
     sample_scale : int, scale on which gaps in subsequent ids will be
@@ -350,7 +344,7 @@ def _get_border_ids_multi_channel(cutout_times, channel_ids=None,
 
     # generating channel array as if all timestamps belong to channel 0
     if channel_ids is None:
-        channels = np.full(cutout_times.shape, 0)
+        channels = np.full(time_ids.shape, 0)
     else:
         channels = channel_ids
 
@@ -358,8 +352,8 @@ def _get_border_ids_multi_channel(cutout_times, channel_ids=None,
     for channel_id in np.sort(np.unique(channels)):
         channel_condition = (channels == channel_id)
 
-        cutout_times_i = cutout_times[channel_condition]
-        border_ids_i = _get_border_ids(cutout_times_i,
+        time_ids_i = time_ids[channel_condition]
+        border_ids_i = _get_border_ids(time_ids_i,
                                        sample_scale=sample_scale)
         if channel_ids is None:
             channel_id = None
