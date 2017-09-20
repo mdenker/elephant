@@ -970,7 +970,7 @@ def compound_poisson_process(rate, A, t_stop, shift=None, t_start=0 * ms):
 # Alias for the compound poisson process
 cpp = compound_poisson_process
 
-def poisson_nonstat(rate_signal, N=1, method='time_rescale'):
+def poisson_nonstat(rate_signal, n=1, method='time_rescale'):
     '''
     Generates an ensemble of non-stationary Poisson processes with identical
     intensity.
@@ -981,7 +981,7 @@ def poisson_nonstat(rate_signal, N=1, method='time_rescale'):
         The analog signal containing the discretization on the time axis of the
         rate profile function of the spike trains to generate or the list of
         the different signal for each neuron
-    N : int
+    n : int
         ensemble sizen number of spike trains n output, in case rate_signa is
         a list of different signal, N spike trains for each different rate
         profiles are generated
@@ -1004,18 +1004,18 @@ def poisson_nonstat(rate_signal, N=1, method='time_rescale'):
         raise ValueError("Unknown method selected.")
     method_use = methods_dic[method]
     if isinstance(rate_signal, AnalogSignal):
-        if N is None:
+        if n is None:
                 sts = method_use(rate_signal)
         else:
-            sts = method_use(rate_signal, N=N)
+            sts = method_use(rate_signal, N=n)
     else:
         sts = []
         for r in rate_signal:
-            sts = sts + method_use(r, N=N)
+            sts = sts + method_use(r, N=n)
     return sts
 
 
-def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
+def poisson_nonstat_time_rescale(rate_signal, n=1, csteps=1000):
     '''
     Generates an ensemble of non-stationary Poisson processes with identical
     intensity.
@@ -1026,7 +1026,7 @@ def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
         The analog signal containing the discretization on the time axis of the
         rate profile function of the spike trains to generate
 
-    N : int
+    n : int
         ensemble size
     csteps : int, default csteps=1000
         spike count resolution
@@ -1046,8 +1046,8 @@ def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
             raise ValueError(
                 'rate must be a positive non empty signal, representing the'
                 'rate at time t')
-    if not (type(N) == int and N > 0):
-            raise ValueError('N (=%s) must be a positive integer' % str(N))
+    if not (type(n) == int and n > 0):
+            raise ValueError('N (=%s) must be a positive integer' % str(n))
     #rescaling the unit of the signal
     elif np.any(rate_signal > 0) and rate_signal.units == pq.Hz:
         signal_simpl = rate_signal.simplified
@@ -1069,8 +1069,8 @@ def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
         icrf *= dt  # convert icrf to time
 
         ## generate spike trains
-        for cn in range(N):
-            buf = _poisson_nonstat_single(icrf, dc, D, dt)
+        for cn in range(n):
+            buf = _poisson_nonstat_single(icrf, dc, D)
             st = SpikeTrain(
                 buf, t_stop=rate_signal.t_stop - rate_signal.t_start,
                 units=rate_signal.t_stop.units)
@@ -1084,13 +1084,13 @@ def poisson_nonstat_time_rescale(rate_signal, N=1, csteps=1000):
         return(
             [SpikeTrain(
                 [], t_stop=rate_signal.t_stop,
-                units=rate_signal.t_stop.units) for i in range(N)])
+                units=rate_signal.t_stop.units) for i in range(n)])
     else:
         raise ValueError(
             'rate must be in Hz, representing the rate at time t')
 
 
-def _poisson_nonstat_single(icrf, dc, D, dt, refr_period = False):
+def _poisson_nonstat_single(icrf, dc, exp_spk_count, refr_period=False):
     '''
     Generates an inhomogeneous Poisson process for a given intensity
     (rate function).
@@ -1101,10 +1101,8 @@ def _poisson_nonstat_single(icrf, dc, D, dt, refr_period = False):
         inverse of cumulative intensity function (see invcumrate())
     dc : float
         spike count resolution (see invcumrate())
-    D : float
+    exp_spk_count : float
         expected number of spikes at simulation end (see invcumrate())
-    dt     : float
-                    time resolution
 
     Returns
     -------
@@ -1114,11 +1112,11 @@ def _poisson_nonstat_single(icrf, dc, D, dt, refr_period = False):
     (Tetzlaff, 2009-02-09)
 
     '''
-    # number of spikes in interval [0,T]
-    nspikes = np.random.poisson(D)
+    # number of spikes in interval [0,t_stop]
+    nspikes = np.random.poisson(exp_spk_count)
 
-    # uniform distribution of nspikes spikes in [0,D]
-    counts = D * np.sort(np.random.rand(nspikes))
+    # uniform distribution of nspikes spikes in [0,exp_spk_count]
+    counts = exp_spk_count * np.sort(np.random.rand(nspikes))
 
     ind = np.where(np.ceil(counts/dc) + 1 <= len(icrf))
     t1 = icrf[np.floor(counts[ind] / dc).astype('i')]
@@ -1126,7 +1124,6 @@ def _poisson_nonstat_single(icrf, dc, D, dt, refr_period = False):
     m = t2 - t1
     spiketimes = t1 + m * (counts[ind] / dc + 1 - np.ceil(counts[ind] / dc))
     spiketimes = np.array(spiketimes)
-#    spiketimes = spiketimes + (np.array([0]+list(np.diff(spiketimes) > 0.001)))
     if len(spiketimes>0) and refr_period:
         spiketimes = np.hstack(
             (
@@ -1236,7 +1233,7 @@ def shift_spiketrain(spiketrain, t):
     return st_shifted
 
 
-def poisson_nonstat_thinning(rate_signal, N=1, cont_sign_method='step'):
+def poisson_nonstat_thinning(rate_signal, n=1, cont_sign_method='step'):
     '''
     Generate non-stationary Poisson SpikeTrains with a common rate profile.
 
@@ -1277,7 +1274,7 @@ def poisson_nonstat_thinning(rate_signal, N=1, cont_sign_method='step'):
         lambda_star = max(rate_signal)
         poiss = _n_poisson(
             rate=lambda_star, t_stop=rate_signal.t_stop,
-            t_start=rate_signal.t_start, n=N)
+            t_start=rate_signal.t_start, n=n)
 
         # For each SpikeTrain, retain spikes according to uniform probabilities
         # and add the resulting spike train to the list sts
