@@ -37,99 +37,99 @@ try:
 except ImportError:
     phy = None
     warnings.warn('Could not import Phy. No Phy (www.phy.readthedocs.org) '
-                  'functionality )vailable for spike extraction and '
+                  'functionality available for spike extraction and '
                   'clustering.')
 import neo
 import elephant
 
-parameter_templates = {
-    'spikesort' : {
-        'extraction_dict':{'sp_win_extract': [-0.5*pq.ms, 1.5*pq.ms],
-                                    'sp_win_align': [-1*pq.ms, 1*pq.ms],
-                                    'filter': [500*pq.Hz, None],
-                                    'filter_order': 4,
-                                    'threshold': 'auto',
-                                    #'remove_doubles': 0.25*pq.ms,
-                                    'edge': 'falling'},
-
-        'sorting_dict':{   'method':'k-means-plus',
-                                    'num_units': 3,
-                                    'ncomps': 2}
-        },
-
-    'phy' : {
-        'experiment_name' : 'dummy_experiment',
-        'prb_file' :      'probe',
-        'spikedetekt' : {   'filter_low':500.,  # Low pass frequency (Hz)
-                            'filter_high_factor':0.95 * .5,
-                            'filter_butter_order':3,  # Order of Butterworth filter.
-
-                            'filter_lfp_low':0,  # LFP filter low-pass frequency
-                            'filter_lfp_high':500,  # LFP filter high-pass frequency
-
-                            'waveform_filter': 1,
-                            'waveform_scale_factor': 1,
-                            'waveform_dc_offset': 0,
-
-                            'chunk_size_seconds':10,
-                            'chunk_overlap_seconds':0.15,
-
-                            'n_excerpts':50,
-                            'excerpt_size_seconds':1,
-                            'threshold_strong_std_factor':4.5,
-                            'threshold_weak_std_factor':2.,
-                            'use_single_threshold': 1,
-                            'detect_spikes':'negative',
-
-                            'connected_component_join_size':1,
-
-                            'extract_s_before':16,
-                            'extract_s_after':16,
-
-                            'n_features_per_channel':3,  # Number of features per channel.
-                            'pca_n_waveforms_max':10000,
-                            'weight_power': 2},
-
-
-        'klustakwik2' : {
-                            'always_split_bimodal': False,
-                             'break_fraction': 0.0,
-                             'consider_cluster_deletion': True,
-                             'dist_thresh': 9.2103403719761836,
-                             'fast_split': False,
-                             'full_step_every': 1,
-                             'max_iterations': 1000,
-                             'max_possible_clusters': 1000,
-                             'max_quick_step_candidates': 100000000,
-                             'max_quick_step_candidates_fraction': 0.4,
-                             'max_split_iterations': None,
-                             'mua_point': 2,
-                             'noise_point': 1,
-                             'num_changed_threshold': 0.05,
-                             'num_cpus': 1,
-                             'num_starting_clusters': 500,
-                             'penalty_k': 0.0,
-                             'penalty_k_log_n': 1.0,
-                             'points_for_cluster_mask': 100,
-                             'prior_point': 1,
-                             'split_every': 40,
-                             'split_first': 20,
-                             'subset_break_fraction': 0.01,
-                             'use_mua_cluster': True,
-                             'use_noise_cluster': True,
-                             'log' : True,
-        }
-    },
-    'manual' : {
-        'extraction_dict' : {
-                         'filter_high':400*pq.Hz,
-                         'filter_low':None,
-                         'threshold':-4.5,
-                         'n_pre':-10, 'n_post':10,
-                         'alignment':'min'
-        }
-    }
-}
+# parameter_templates = {
+#     'spikesort' : {
+#         'extraction_dict':{'sp_win_extract': [-0.5*pq.ms, 1.5*pq.ms],
+#                                     'sp_win_align': [-1*pq.ms, 1*pq.ms],
+#                                     'filter': [500*pq.Hz, None],
+#                                     'filter_order': 4,
+#                                     'threshold': 'auto',
+#                                     #'remove_doubles': 0.25*pq.ms,
+#                                     'edge': 'falling'},
+#
+#         'sorting_dict':{   'method':'k-means-plus',
+#                                     'num_units': 3,
+#                                     'ncomps': 2}
+#         },
+#
+#     'phy' : {
+#         'experiment_name' : 'dummy_experiment',
+#         'prb_file' :      'probe',
+#         'spikedetekt' : {   'filter_low':500.,  # Low pass frequency (Hz)
+#                             'filter_high_factor':0.95 * .5,
+#                             'filter_butter_order':3,  # Order of Butterworth filter.
+#
+#                             'filter_lfp_low':0,  # LFP filter low-pass frequency
+#                             'filter_lfp_high':500,  # LFP filter high-pass frequency
+#
+#                             'waveform_filter': 1,
+#                             'waveform_scale_factor': 1,
+#                             'waveform_dc_offset': 0,
+#
+#                             'chunk_size_seconds':10,
+#                             'chunk_overlap_seconds':0.15,
+#
+#                             'n_excerpts':50,
+#                             'excerpt_size_seconds':1,
+#                             'threshold_strong_std_factor':4.5,
+#                             'threshold_weak_std_factor':2.,
+#                             'use_single_threshold': 1,
+#                             'detect_spikes':'negative',
+#
+#                             'connected_component_join_size':1,
+#
+#                             'extract_s_before':16,
+#                             'extract_s_after':16,
+#
+#                             'n_features_per_channel':3,  # Number of features per channel.
+#                             'pca_n_waveforms_max':10000,
+#                             'weight_power': 2},
+#
+#
+#         'klustakwik2' : {
+#                             'always_split_bimodal': False,
+#                              'break_fraction': 0.0,
+#                              'consider_cluster_deletion': True,
+#                              'dist_thresh': 9.2103403719761836,
+#                              'fast_split': False,
+#                              'full_step_every': 1,
+#                              'max_iterations': 1000,
+#                              'max_possible_clusters': 1000,
+#                              'max_quick_step_candidates': 100000000,
+#                              'max_quick_step_candidates_fraction': 0.4,
+#                              'max_split_iterations': None,
+#                              'mua_point': 2,
+#                              'noise_point': 1,
+#                              'num_changed_threshold': 0.05,
+#                              'num_cpus': 1,
+#                              'num_starting_clusters': 500,
+#                              'penalty_k': 0.0,
+#                              'penalty_k_log_n': 1.0,
+#                              'points_for_cluster_mask': 100,
+#                              'prior_point': 1,
+#                              'split_every': 40,
+#                              'split_first': 20,
+#                              'subset_break_fraction': 0.01,
+#                              'use_mua_cluster': True,
+#                              'use_noise_cluster': True,
+#                              'log' : True,
+#         }
+#     },
+#     'manual' : {
+#         'extraction_dict' : {
+#                          'filter_high':400*pq.Hz,
+#                          'filter_low':None,
+#                          'threshold':-4.5,
+#                          'n_pre':-10, 'n_post':10,
+#                          'alignment':'min'
+#         }
+#     }
+# }
 
 
 # def get_updated_parameters(software,new_parameters):
@@ -1118,10 +1118,8 @@ class SpikeExtractor(SpikeSorter):
     def sort_analogsignal(self, anasig):
         parameters = copy.deepcopy(self.parameter_dict)
         sig = anasig
-        if ('filter_high' in parameters
-            and 'filter_low' in parameters):
-            low = parameters.pop('filter_low')
-            high = parameters.pop('filter_high')
+        if 'filter' in parameters:
+            low, high = parameters.pop('filter')
             if (low is not None) or (high is not None):
                 sig = elephant.signal_processing.butter(anasig, high, low)
                 sig.segment = anasig.segment
@@ -1341,119 +1339,119 @@ class SpikeSortSorter(SpikeSorter):
 
             return outp
 
-    def sort_analogsignal(self, anasig, waveforms, sort):
-        extraction_dict = self.parameter_dict['extraction_dict']
-        sorting_dict = self.parameter_dict['sorting_dict']
-        # Frequency filtering for spike detection in two steps for better filter stability
-        filtered_ana = copy.deepcopy(anasig)
-        if extraction_dict['filter'][0] is not None:
-            filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=extraction_dict['filter'][0],
-                                                             lowpass_freq=None, order=extraction_dict['filter_order'],
-                                                             filter_function='filtfilt', fs=1.0, axis=-1)
-        if extraction_dict['filter'][1] is not None:
-            filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=None,
-                                                             lowpass_freq=extraction_dict['filter'][1],
-                                                             order=extraction_dict['filter_order'],
-                                                             filter_function='filtfilt', fs=1.0, axis=-1)
-        if any(np.isnan(filtered_ana)):
-            raise ValueError('Parameters for filtering (%s, %s) yield non valid analogsignal'
-                             % (extraction_dict['filter'], extraction_dict['filter_order']))
-
-        spt = spike_sort.extract.detect_spikes(self._ss_wrap(filtered_ana), contact=0, thresh=extraction_dict['threshold'],
-                                               edge=extraction_dict['edge'])
-        spt = spike_sort.extract.align_spikes(self._ss_wrap(anasig), spt,
-                                              [i.rescale('ms').magnitude for i in extraction_dict['sp_win_align']],
-                                              type="min", contact=0, resample=1, remove=False)
-        if 'remove_doubles' in extraction_dict:
-            spt = spike_sort.core.extract.remove_doubles(spt, extraction_dict['remove_doubles'])
-
-        if waveforms or sort:
-            sp_waves = spike_sort.extract.extract_spikes(self._ss_wrap(anasig), spt,
-                                                         [i.rescale('ms').magnitude
-                                                         for i in extraction_dict['sp_win_extract']],
-                                                         contacts=0)
-
-            #  align waveform in y-axis
-            for waveform in range(sp_waves['data'].shape[1]):
-                sp_waves['data'][:, waveform, 0] -= np.mean(sp_waves['data'][:, waveform, 0])
-
-            if sort:
-                if len(spt['data']) > sorting_dict['ncomps']:
-                    features = self._fet_pca(sp_waves, ncomps=sorting_dict['ncomps'])
-                    clust_idx = spike_sort.cluster.cluster(sorting_dict['method'], features, sorting_dict['num_units'])
-                    # clustered spike times
-                    spt_clust = spike_sort.cluster.split_cells(spt, clust_idx)
-                else:
-                    warnings.warn('Spike sorting on electrode %i not possible due to low number of spikes.'
-                                  ' Perhaps the threshold for spike extraction is too conservative?'
-                                  % anasig.annotations['electrode_id'])
-                    spt_clust = {0: spt}
-                    clust_idx = np.array([0])
-
-                if waveforms and len(spt['data']) > sorting_dict['ncomps']:
-                    sp_waves = dict([(cl, {'data': sp_waves['data'][:, clust_idx == cl, :]})
-                                     for cl in np.unique(clust_idx)])
-                else:
-                    sp_waves = {0: sp_waves}
-
-
-        # Create SpikeTrain objects for each unit
-        # Unit id 0 == Mua; unit_id >0 => Sua
-        spiketrains = {i+1: j for i, j in spt_clust.iteritems()} if sort else {0: spt}
-        sp_waves = {i+1: j for i, j in sp_waves.iteritems()} if waveforms and sort else {0: sp_waves}
-        for unit_i in spiketrains:
-            sorted = sort
-            sorting_params = sorting_dict if sort else None
-            spiketimes = spiketrains[unit_i]['data'] * pq.ms + anasig.t_start
-
-            st = neo.SpikeTrain(times=spiketimes,
-                                t_start=anasig.t_start,
-                                t_stop=anasig.t_stop,
-                                sampling_rate=anasig.sampling_rate,
-                                name="Channel %i, Unit %i" % (anasig.annotations['channel_index'], unit_i),
-                                file_origin=anasig.file_origin,
-                                unit_id=unit_i,
-                                channel_id=anasig.annotations['channel_index'],
-                                electrode_id=anasig.annotations['electrode_id'],
-                                sorted=sorted,
-                                sorting_parameters=sorting_params,
-                                extraction_params=extraction_dict)
-
-            if waveforms and not any([d==0 for d in sp_waves[unit_i]['data'].shape]):
-                if sp_waves[unit_i]['data'].shape[2] != 1:
-                    raise ValueError('Unexpected shape of waveform array.')
-                # waveform dimensions [waveform_id,???,time]
-                st.waveforms = np.transpose(sp_waves[unit_i]['data'][:,:,0]) * anasig.units
-                st.waveforms = st.waveforms.reshape((st.waveforms.shape[0],1,st.waveforms.shape[1]))
-                st.left_sweep = extraction_dict['sp_win_align'][0]
-                # st.spike_duration = extraction_dict['sp_win_align'][1] - extraction_dict['sp_win_align'][0]
-                # st.right_sweep = extraction_dict['sp_win_align'][1]
-            else:
-                st.waveforms = None
-
-            # connecting unit, spiketrain and segment
-            rcgs = anasig.recordingchannel.recordingchannelgroups
-            u_annotations = {'sorted': sorted,
-                             'parameters':{ 'sorting_params': sorting_params,
-                                            'extraction_params': extraction_dict}}
-
-            new_unit = None
-            for rcg in rcgs:
-                # checking if a similar unit already exists (eg. from sorting a different segment)
-                rcg_units = [u for u in rcg.units if u.name == st.name and u.annotations == u_annotations]
-                if len(rcg_units) == 1:
-                    unit = rcg_units[0]
-                elif len(rcg_units) == 0:
-                    # Generating new unit if necessary
-                    if new_unit is None:
-                        new_unit = neo.core.Unit(name=st.name, **u_annotations)
-                    unit = new_unit
-                else:
-                    raise ValueError('%i units of name %s and annotations %s exists.'
-                                     ' This is ambiguous.' % (len(rcg_units), st.name, u_annotations))
-                rcg.units.append(unit)
-                unit.spiketrains.append(st)
-            seg.spiketrains.append(st)
+    # def sort_analogsignal(self, anasig, waveforms, sort):
+    #     extraction_dict = self.parameter_dict['extraction_dict']
+    #     sorting_dict = self.parameter_dict['sorting_dict']
+    #     # Frequency filtering for spike detection in two steps for better filter stability
+    #     filtered_ana = copy.deepcopy(anasig)
+    #     if extraction_dict['filter'][0] is not None:
+    #         filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=extraction_dict['filter'][0],
+    #                                                          lowpass_freq=None, order=extraction_dict['filter_order'],
+    #                                                          filter_function='filtfilt', fs=1.0, axis=-1)
+    #     if extraction_dict['filter'][1] is not None:
+    #         filtered_ana = elephant.signal_processing.butter(filtered_ana, highpass_freq=None,
+    #                                                          lowpass_freq=extraction_dict['filter'][1],
+    #                                                          order=extraction_dict['filter_order'],
+    #                                                          filter_function='filtfilt', fs=1.0, axis=-1)
+    #     if any(np.isnan(filtered_ana)):
+    #         raise ValueError('Parameters for filtering (%s, %s) yield non valid analogsignal'
+    #                          % (extraction_dict['filter'], extraction_dict['filter_order']))
+    #
+    #     spt = spike_sort.extract.detect_spikes(self._ss_wrap(filtered_ana), contact=0, thresh=extraction_dict['threshold'],
+    #                                            edge=extraction_dict['edge'])
+    #     spt = spike_sort.extract.align_spikes(self._ss_wrap(anasig), spt,
+    #                                           [i.rescale('ms').magnitude for i in extraction_dict['sp_win_align']],
+    #                                           type="min", contact=0, resample=1, remove=False)
+    #     if 'remove_doubles' in extraction_dict:
+    #         spt = spike_sort.core.extract.remove_doubles(spt, extraction_dict['remove_doubles'])
+    #
+    #     if waveforms or sort:
+    #         sp_waves = spike_sort.extract.extract_spikes(self._ss_wrap(anasig), spt,
+    #                                                      [i.rescale('ms').magnitude
+    #                                                      for i in extraction_dict['sp_win_extract']],
+    #                                                      contacts=0)
+    #
+    #         #  align waveform in y-axis
+    #         for waveform in range(sp_waves['data'].shape[1]):
+    #             sp_waves['data'][:, waveform, 0] -= np.mean(sp_waves['data'][:, waveform, 0])
+    #
+    #         if sort:
+    #             if len(spt['data']) > sorting_dict['ncomps']:
+    #                 features = self._fet_pca(sp_waves, ncomps=sorting_dict['ncomps'])
+    #                 clust_idx = spike_sort.cluster.cluster(sorting_dict['method'], features, sorting_dict['num_units'])
+    #                 # clustered spike times
+    #                 spt_clust = spike_sort.cluster.split_cells(spt, clust_idx)
+    #             else:
+    #                 warnings.warn('Spike sorting on electrode %i not possible due to low number of spikes.'
+    #                               ' Perhaps the threshold for spike extraction is too conservative?'
+    #                               % anasig.annotations['electrode_id'])
+    #                 spt_clust = {0: spt}
+    #                 clust_idx = np.array([0])
+    #
+    #             if waveforms and len(spt['data']) > sorting_dict['ncomps']:
+    #                 sp_waves = dict([(cl, {'data': sp_waves['data'][:, clust_idx == cl, :]})
+    #                                  for cl in np.unique(clust_idx)])
+    #             else:
+    #                 sp_waves = {0: sp_waves}
+    #
+    #
+    #     # Create SpikeTrain objects for each unit
+    #     # Unit id 0 == Mua; unit_id >0 => Sua
+    #     spiketrains = {i+1: j for i, j in spt_clust.iteritems()} if sort else {0: spt}
+    #     sp_waves = {i+1: j for i, j in sp_waves.iteritems()} if waveforms and sort else {0: sp_waves}
+    #     for unit_i in spiketrains:
+    #         sorted = sort
+    #         sorting_params = sorting_dict if sort else None
+    #         spiketimes = spiketrains[unit_i]['data'] * pq.ms + anasig.t_start
+    #
+    #         st = neo.SpikeTrain(times=spiketimes,
+    #                             t_start=anasig.t_start,
+    #                             t_stop=anasig.t_stop,
+    #                             sampling_rate=anasig.sampling_rate,
+    #                             name="Channel %i, Unit %i" % (anasig.annotations['channel_index'], unit_i),
+    #                             file_origin=anasig.file_origin,
+    #                             unit_id=unit_i,
+    #                             channel_id=anasig.annotations['channel_index'],
+    #                             electrode_id=anasig.annotations['electrode_id'],
+    #                             sorted=sorted,
+    #                             sorting_parameters=sorting_params,
+    #                             extraction_params=extraction_dict)
+    #
+    #         if waveforms and not any([d==0 for d in sp_waves[unit_i]['data'].shape]):
+    #             if sp_waves[unit_i]['data'].shape[2] != 1:
+    #                 raise ValueError('Unexpected shape of waveform array.')
+    #             # waveform dimensions [waveform_id,???,time]
+    #             st.waveforms = np.transpose(sp_waves[unit_i]['data'][:,:,0]) * anasig.units
+    #             st.waveforms = st.waveforms.reshape((st.waveforms.shape[0],1,st.waveforms.shape[1]))
+    #             st.left_sweep = extraction_dict['sp_win_align'][0]
+    #             # st.spike_duration = extraction_dict['sp_win_align'][1] - extraction_dict['sp_win_align'][0]
+    #             # st.right_sweep = extraction_dict['sp_win_align'][1]
+    #         else:
+    #             st.waveforms = None
+    #
+    #         # connecting unit, spiketrain and segment
+    #         rcgs = anasig.recordingchannel.recordingchannelgroups
+    #         u_annotations = {'sorted': sorted,
+    #                          'parameters':{ 'sorting_params': sorting_params,
+    #                                         'extraction_params': extraction_dict}}
+    #
+    #         new_unit = None
+    #         for rcg in rcgs:
+    #             # checking if a similar unit already exists (eg. from sorting a different segment)
+    #             rcg_units = [u for u in rcg.units if u.name == st.name and u.annotations == u_annotations]
+    #             if len(rcg_units) == 1:
+    #                 unit = rcg_units[0]
+    #             elif len(rcg_units) == 0:
+    #                 # Generating new unit if necessary
+    #                 if new_unit is None:
+    #                     new_unit = neo.core.Unit(name=st.name, **u_annotations)
+    #                 unit = new_unit
+    #             else:
+    #                 raise ValueError('%i units of name %s and annotations %s exists.'
+    #                                  ' This is ambiguous.' % (len(rcg_units), st.name, u_annotations))
+    #             rcg.units.append(unit)
+    #             unit.spiketrains.append(st)
+    #         seg.spiketrains.append(st)
 
 msg = 'Phy must be available to extract spikes using the PhySorter.'
 @requires(phy, msg)

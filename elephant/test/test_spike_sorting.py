@@ -8,12 +8,14 @@ Tests for the function sta module
 
 import unittest
 import math
-import numpy as np
 from neo import Block, Segment, AnalogSignal, SpikeTrain
-import quantities as pq
 from elephant.spike_sorting import *
 
 class SpikeSorterTestCase(object):
+    """
+    All spike sorter tests should inherit from this class and implement the
+    corresponding test functions.
+    """
 
     def setUp(self):
         self.asiga0 = AnalogSignal(np.array([
