@@ -58,6 +58,11 @@ def spike_extraction(signal, threshold=0.0 * mV, sign='above', detection='peak',
         the waveforms in result_st.waveforms. Waveforms of spikes that exceed
         the intervals contain None as samples.
     """
+    if (hasattr(threshold, 'magnitude') and threshold.magnitude == 0) or \
+            threshold == 0:
+        warnings.warn('Using a threshold of 0 for spike extraction. This '
+                      'could lead to extended runtime and memory consumption.')
+
     # Get spike time_stamps
     if time_stamps is None:
         if detection == 'peak':
@@ -272,8 +277,8 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above'):
     """
 
     threshold, time_ids, channel_ids = _get_threshold_and_cutouts(signal,
-                                                                     threshold,
-                                                                     sign)
+                                                                  threshold,
+                                                                  sign)
 
     border_set_ids = _get_border_ids_multi_channel(time_ids=time_ids,
                                                    channel_ids=channel_ids,
@@ -295,6 +300,12 @@ def peak_detection(signal, threshold=0.0 * mV, sign='above'):
             split_signal = np.split(signal[:, channel_id], true_borders)[1::2]
 
             maxima_idc_split = np.array([peak_func(x) for x in split_signal])
+
+            # In old numpy versions (eg.1.10) this array has only one dimension,
+            # which leads to duplicated spike times.
+            # Manual fix here:
+            if len(maxima_idc_split.shape) == 1:
+                maxima_idc_split = maxima_idc_split[:, np.newaxis]
 
             max_idc = maxima_idc_split + true_borders[0::2, np.newaxis]
 

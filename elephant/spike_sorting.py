@@ -1001,7 +1001,8 @@ class SpikeSorter(object):
             chidx = neo.ChannelIndex([0], #TODO: what index should be used here?
                                      name='spike sorting channel_index',
                                      sorting_hash=self.sorting_hash,
-                                     sorter=type(self).__name__)
+                                     sorter=type(self).__name__,
+                                     sorting_parameters=str(self.parameter_dict))
             block.channel_indexes.append(chidx)
             chidx.block = block
             block.create_relationship()
