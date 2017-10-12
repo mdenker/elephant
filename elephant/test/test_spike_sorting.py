@@ -111,7 +111,7 @@ class SpikeExtrationTestCase(SpikeSorterTestCase, unittest.TestCase):
 
 
     def test_parameter_conservation(self):
-        extractor = SpikeExtractor(filter_high=1*pq.Hz, filter_low=None)
+        extractor = SpikeExtractor(filter=(None, 1*pq.Hz))
         hash_before = extractor.sorting_hash
 
         extractor.sort_block(self.block)

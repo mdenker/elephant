@@ -1026,7 +1026,7 @@ class SpikeSorter(object):
                           ''.format(neo_obj))
         return channel_id
 
-    def _add_unit(self, block, channel_id, unit_id):
+    def _get_unit(self, block, channel_id, unit_id):
         sorting_chidx = self._get_sorting_channel(block)
         channel_indexes = [sorting_chidx]
         # TODO: unit should also be added to channel index holding analogsignal
@@ -1038,13 +1038,10 @@ class SpikeSorter(object):
             #     continue
             for unit in chidx.units:
                 if ('unit_id' in unit.annotations
-                    and unit.annotations['unit_id'] == unit_id
-                    and 'channel_id' in unit.annotations
-                    and unit.annotations['channel_id'] == channel_id):
-                    raise ValueError('Unit with id {} on channel {} exists '
-                                     'already for sorting {}'
-                                     ''.format(unit_id, channel_id,
-                                               self.sorting_hash))
+                        and unit.annotations['unit_id'] == unit_id
+                        and 'channel_id' in unit.annotations
+                        and unit.annotations['channel_id'] == channel_id):
+                    return unit
 
         unit = neo.Unit(channel_id=channel_id, unit_id=unit_id,
                         sorting_hash=self.sorting_hash)
@@ -1131,7 +1128,7 @@ class SpikeExtractor(SpikeSorter):
         self._add_to_segment(anasig, spiketrains)
 
         channel_id = self._get_channel_id(anasig)
-        unit = self._add_unit(anasig.segment.block, channel_id, unit_id=0)
+        unit = self._get_unit(anasig.segment.block, channel_id, unit_id=0)
         unit.annotate(sorted=False,
                       unit_type='mua')
         # the sorting_hash could also be annotated using the mock module in
@@ -1198,7 +1195,7 @@ class SpikeTrainGenerator(SpikeSorter):
             self._add_to_segment(anasig, spiketrain)
 
             channel_id = self._get_channel_id(anasig)
-            unit = self._add_unit(anasig.segment.block, channel_id, unit_id=-1)
+            unit = self._get_unit(anasig.segment.block, channel_id, unit_id=-1)
             unit.annotate(sorted=False,
                           unit_type='mua',
                           signal_type='stimulation_times')
@@ -1229,7 +1226,7 @@ class KMeansSorter(SpikeSorter):
         if waveforms.shape[0] == 0:
             print('No waveforms present to be sorted.')
             channel_id = self._get_channel_id(spiketrain)
-            unit = self._add_unit(spiketrain.segment.block, channel_id,
+            unit = self._get_unit(spiketrain.segment.block, channel_id,
                                   unit_id=None)
             unit.annotate(sorted=True, unit_type='sua')
 
@@ -1266,7 +1263,7 @@ class KMeansSorter(SpikeSorter):
             sorted_st.segment = spiketrain.segment
             spiketrain.segment.spiketrains.append(sorted_st)
 
-            unit = self._add_unit(spiketrain.segment.block, channel_id,
+            unit = self._get_unit(spiketrain.segment.block, channel_id,
                                   unit_id=unit_id)
             unit.annotate(sorted=True, unit_type='sua')
 
