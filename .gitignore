@@ -28,6 +28,7 @@ nosetests.xml
 *.o
 *.py[ocd]
 *.so
+*.mexa64
 
 # Python files #
 ################
@@ -67,8 +68,3 @@ cover
 ehthumbs.db
 Icon?
 Thumbs.db
-
-# Things specific to this project #
-###################################
-# Compiles MEX files by matlab
-*.mexa64
