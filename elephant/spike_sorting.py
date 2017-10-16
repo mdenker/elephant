@@ -15,6 +15,7 @@ import os.path
 from os import linesep as sep
 from elephant.spike_train_generation import (spike_extraction,
                                              waveform_extraction)
+from hashlib import blake2b
 
 # Recommended spike sort version is 'dev' branch.
 # The SpikeSort/src folder needs to be added to the PYTHONPATH,
@@ -955,20 +956,26 @@ class SpikeSorter(object):
                 return tuple([_make_hash(e) for e in o])
 
             elif isinstance(o, pq.Quantity):
-                return hash(str(o))
+                h = blake2b(digest_size=10)
+                h.update(str(o).encode())
+                return h.hexdigest()
 
             elif isinstance(o, dict):
                 new_o = copy.deepcopy(o)
                 for k, v in new_o.items():
                     new_o[k] = _make_hash(v)
                 ordered_obj = collections.OrderedDict(sorted(new_o.items()))
-                return hash(str(ordered_obj))
+                h = blake2b(digest_size=10)
+                h.update(str(ordered_obj).encode())
+                return h.hexdigest()
             # set hash of None explicitly since differs between python
             # instances
             elif o is None:
                 return -1
             else:
-                return hash(o)
+                h = blake2b(digest_size=10)
+                h.update(str(o).encode())
+                return h.hexdigest()
 
         return _make_hash(parameter_dict)
 
