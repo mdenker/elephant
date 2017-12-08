@@ -1090,7 +1090,7 @@ def poisson_nonstat_time_rescale(rate_signal, n=1, csteps=1000):
             'rate must be in Hz, representing the rate at time t')
 
 
-def _poisson_nonstat_single(icrf, dc, exp_spk_count, refr_period=False):
+def _poisson_nonstat_single(icrf, dc, exp_spk_count):
     '''
     Generates an inhomogeneous Poisson process for a given intensity
     (rate function).
@@ -1116,20 +1116,13 @@ def _poisson_nonstat_single(icrf, dc, exp_spk_count, refr_period=False):
     nspikes = np.random.poisson(exp_spk_count)
 
     # uniform distribution of nspikes spikes in [0,exp_spk_count]
-    counts = exp_spk_count * np.sort(np.random.rand(nspikes))
-
+    counts = exp_spk_count * np.sort(np.random.rand(nspikes)) + icrf[0]
     ind = np.where(np.ceil(counts/dc) + 1 <= len(icrf))
     t1 = icrf[np.floor(counts[ind] / dc).astype('i')]
     t2 = icrf[np.floor(counts[ind] / dc).astype('i') + 1]
     m = t2 - t1
     spiketimes = t1 + m * (counts[ind] / dc + 1 - np.ceil(counts[ind] / dc))
     spiketimes = np.array(spiketimes)
-    if len(spiketimes>0) and refr_period:
-        spiketimes = np.hstack(
-            (
-                spiketimes[0], spiketimes[np.where(
-                    np.diff(spiketimes) > (
-                        np.random.rand() / 1000. + 0.001))[0]+1]))
     return spiketimes
 
 
@@ -1181,7 +1174,7 @@ def _invcumrate(crf, csteps=1000):
 
     '''
 
-    D = crf[-1]  # cumulative spike-count at time T
+    D = crf[-1] # cumulative spike-count at time T
     dc = D / csteps  # spike-count resolution
     icrf = np.nan * np.ones(csteps, 'f')
 
@@ -1192,12 +1185,12 @@ def _invcumrate(crf, csteps=1000):
             k += 1
 
         if k == 0:
-            icrf[i] = 0.0
+            icrf[i] = 0
         else:
             # interpolate between crf[pl] and crf[pr]
             m = 1. / (crf[k] - crf[k - 1])  # approximated slope of icrf
             icrf[i] = np.float(k - 1) + m * (
-                np.float(i * dc) - crf[k - 1])  # interpolated value of icrf
+                np.float(i * dc + crf[0]) - crf[k - 1])  # interpolated value of icrf
 
     return icrf, dc, D
 
@@ -1285,7 +1278,7 @@ def poisson_nonstat_thinning(rate_signal, n=1, cont_sign_method='step'):
 
             # Accept each spike at time t with probability r(t)/max_rate
             u = np.random.uniform(size=len(st)) * lambda_star
-            spiketrain = st[u < lamb]
+            spiketrain = st[u < lamb.flatten()]
             sts.append(spiketrain)
 
         return sts
