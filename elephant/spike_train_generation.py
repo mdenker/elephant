@@ -1116,12 +1116,14 @@ def _poisson_nonstat_single(icrf, dc, exp_spk_count):
     nspikes = np.random.poisson(exp_spk_count)
 
     # uniform distribution of nspikes spikes in [0,exp_spk_count]
-    counts = exp_spk_count * np.sort(np.random.rand(nspikes)) + icrf[0]
-    ind = np.where(np.ceil(counts/dc) + 1 <= len(icrf))
+    counts = exp_spk_count * np.sort(np.random.rand(nspikes))
+    ind = np.where(np.ceil(counts/dc) <= len(icrf))[0]
+    print(icrf)
     t1 = icrf[np.floor(counts[ind] / dc).astype('i')]
     t2 = icrf[np.floor(counts[ind] / dc).astype('i') + 1]
-    m = t2 - t1
-    spiketimes = t1 + m * (counts[ind] / dc + 1 - np.ceil(counts[ind] / dc))
+    m = (t2 - t1) / dc
+    spiketimes = t1 + m * (counts[ind] - np.floor(counts[ind] / dc)*dc)
+    # spiketimes = t1 + m * (counts[ind] / dc + 1 - np.ceil(counts[ind] / dc))
     spiketimes = np.array(spiketimes)
     return spiketimes
 
@@ -1176,7 +1178,7 @@ def _invcumrate(crf, csteps=1000):
 
     D = crf[-1] # cumulative spike-count at time T
     dc = D / csteps  # spike-count resolution
-    icrf = np.nan * np.ones(csteps, 'f')
+    icrf = np.nan * np.ones(csteps+1, 'f')
 
     k = 0
     for i in range(csteps):  # loop over spike-count grid
@@ -1190,8 +1192,8 @@ def _invcumrate(crf, csteps=1000):
             # interpolate between crf[pl] and crf[pr]
             m = 1. / (crf[k] - crf[k - 1])  # approximated slope of icrf
             icrf[i] = np.float(k - 1) + m * (
-                np.float(i * dc + crf[0]) - crf[k - 1])  # interpolated value of icrf
-
+                np.float(i * dc) - crf[k - 1])  # interpolated value of icrf
+    icrf[-1] = len(crf)
     return icrf, dc, D
 
 
