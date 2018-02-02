@@ -248,6 +248,23 @@ def __calculate_correlation_or_covariance(binned_sts, binary, corrcoef_norm):
     return np.squeeze(C)
 
 
+# def spike_time_tiling_coefficient(st_1, st_2, dt):
+#     def _compute_P(st, dt):
+
+def _compute_T(st, dt):
+    n_spikes = len(st)
+    time_a = 2 * n_spikes * dt
+    if st[0] - st.t_start < dt:
+        time_a = time_a - dt + st[0] - st.t_start
+    if st[-1] + dt > st.t_stop:
+        time_a = time_a - dt + st.t_stop - st[-1]
+    if n_spikes > 1:
+        diff = np.diff(st).view(pq.Quantity)
+        time_a = time_a -2 * len(diff[diff < dt]) * dt + np.sum(
+            diff[diff < dt])
+    return time_a
+
+
 def cross_correlation_histogram(
         binned_st1, binned_st2, window='full', border_correction=False, binary=False,
         kernel=None, method='speed', cross_corr_coef=False):
