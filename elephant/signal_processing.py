@@ -143,16 +143,16 @@ def cross_correlation_function(signal, ch_pairs, env=False, nlags=None):
     Computes unbiased estimator of the cross-correlation function.
 
     Calculates the unbiased estimator of the cross-correlation function [1]_
-    
+
     .. math::
              R(\\tau) = \\frac{1}{N-|k|} R'(\\tau) \\ ,
-    
-    where :math:`R'(\\tau) = \\left<x(t)y(t+\\tau)\\right>` in a pairwise 
+
+    where :math:`R'(\\tau) = \\left<x(t)y(t+\\tau)\\right>` in a pairwise
     manner, i.e. `signal[ch_pairs[0,0]]` vs `signal2[ch_pairs[0,1]]`,
     `signal[ch_pairs[1,0]]` vs `signal2[ch_pairs[1,1]]`, and so on. The
     cross-correlation function is obtained by `scipy.signal.fftconvolve`.
     Time series in signal are zscored beforehand. Alternatively returns the
-    Hilbert envelope of :math:`R(\\tau)`, which is useful to determine the 
+    Hilbert envelope of :math:`R(\\tau)`, which is useful to determine the
     correlation length of oscillatory signals.
 
     Parameters
@@ -766,3 +766,39 @@ def derivative(signal):
         sampling_period=signal.sampling_period)
 
     return derivative_sig
+
+
+def detrending(signal, order=2):
+    # ToDo: deal with multi-channel AnalogSignal
+    # ToDo: improve efficiency
+    # ToDo: write docstring
+    # ToDo: window options in wrapper function?
+
+    if isinstance(signal, neo.AnalogSignal):
+        X = signal.as_array()
+    elif isinstance(signal, pq.quantity.Quantity):
+        X = copy(signal.magnitude)
+    elif isinstance(signal, np.ndarray):
+        X = copy(signal)
+    else:
+        raise TypeError('Input signal must be either an AnalogSignal,'
+                      + 'a quantity array, or a numpy array.')
+
+    window = len(signal)
+    if order > 0:
+        X = X - np.mean(X, axis=0)
+    if order > 1:
+        factor = [1, 1/2., 1/6.]
+        for i in np.arange(order-1)+1:
+            detrend = np.linspace(-window/2., window/2., window)**i \
+                    * np.mean(np.diff(X, n=i, axis=0)) * factor[i-1]
+            X = X - detrend
+
+    if isinstance(signal, neo.AnalogSignal):
+        return neo.AnalogSignal(X, t_start=signal.t_start, t_stop=signal.t_stop,
+                                sampling_period=signal.sampling_period,
+                                **signal.annotations, **signal.array_annotations)
+    elif isinstance(signal, pq.quantity.Quantity):
+        return X * signal.units
+    elif isinstance(signal, np.ndarray):
+        return X
