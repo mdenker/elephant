@@ -75,3 +75,4 @@ Thumbs.db
 ###################################
 # ignored folder for fast prototyping
 ignored/
+data/

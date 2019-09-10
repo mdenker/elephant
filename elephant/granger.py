@@ -34,7 +34,7 @@ class CausalBlock(neo.Block):
         self.create_relationship()
 
 
-def pairwise_granger_causality(signal_segments):
+def pairwise_granger_causality(*signal_segments):
     n_signals = len(signal_segments)
     if n_signals < 2:
         raise ValueError(
@@ -52,5 +52,5 @@ def pairwise_granger_causality(signal_segments):
     multitaper = Multitaper(combined_matrix,
                             sampling_frequency=sampl_freq)
     connectivity = Connectivity.from_multitaper(multitaper)
-    gr = connectivity.pairwise_spectral_granger_prediction()
-    return gr
+    granger = connectivity.pairwise_spectral_granger_prediction()
+    return granger
