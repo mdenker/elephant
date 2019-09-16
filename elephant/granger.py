@@ -1,56 +1,62 @@
-import pickle as pkl
-from collections import defaultdict
+import warnings
 
-import matplotlib.pyplot as plt
 import neo
 import numpy as np
-import quantities as pq
-from tqdm import tqdm
 from spectral_connectivity import Multitaper, Connectivity
 
-from elephant.load_routine import get_epochs, cut_segment_by_epoch, \
-    get_events, add_epoch
 
+def pairwise_granger_causality(analog_signals):
+    """
+    Parameters
+    ----------
+    analog_signals: iterable object
+        Iterable of trials of length n_trials.
+        Each trial is either:
+            * a list of AnalogSignals of length n_signals;
+              each AnalogSignal is a list of n_time_samples time points.
+            * AnalogSignal matrix of shape (n_time_samples, n_signals).
+        In either case, each trial should have at least two signals
+        (n_signals > 1).
 
-class CausalBlock(neo.Block):
-    def __init__(self, block, causal_labels, t_start=0 * pq.ms, name=None):
-        super(CausalBlock, self).__init__(name=name)
-        self.block = block
-        self.causal_labels = causal_labels
-        self.t_start = t_start
-        if name is None:
-            name = ' '.join(causal_labels)
-        self.name = name
+    Returns
+    -------
+    granger: np.ndarray
+        Pairwise Granger Causality matrix of shape
+        (n_time_windows, n_frequencies, n_signals, n_signals).
+        `n_frequencies` depends on the arguments, specified for Multitaper.
 
-        # get epochs of all successful attempts
-        successful_attempts = \
-            get_epochs(block, successful=True, epoch_category='All Attempts')[
-                0]
+    """
+    sampl_freq = set()
+    rate_in_hz = lambda rate: float(rate.rescale('Hz').magnitude)
 
-        attempts_cut = cut_segment_by_epoch(block.segments[1],
-                                            successful_attempts)
-        self.annotations = block.annotations
-        self.segments = attempts_cut
-        self.create_relationship()
-
-
-def pairwise_granger_causality(*signal_segments):
-    n_signals = len(signal_segments)
-    if n_signals < 2:
-        raise ValueError(
-            "Input list should have at least 2 analog signals/arrays")
-    sampl_freq = signal_segments[0].sampling_rate.rescale('Hz')
-    n_trials = len(signal_segments[0])  # n_trials per segment
-    n_time_samples = len(signal_segments[0][0])
     # combined_matrix = np.zeros((n_time_samples, n_trials, n_signals))
     combined_matrix = []
-    for segments in signal_segments:
-        lfps = segments.filter(signal_type="LFP", objects="AnalogSignal")[0]
-        lfps = lfps.magnitude
-        combined_matrix.append(lfps)
+    for trial in analog_signals:
+        # some AnalogSignals might have a shape of (n_time_samples, 1)
+        if isinstance(trial, neo.AnalogSignal) and trial.ndim == 2 \
+                and trial.shape[1] > 1:
+            lfps = trial
+            sampl_freq.add(rate_in_hz(trial.sampling_rate))
+        else:
+            # stack a list of AnalogSignals column wise
+            sampl_freq.add(rate_in_hz(trial[0].sampling_rate))
+            lfps = np.hstack(trial)
+        # lfps shape: (n_time_samples, n_signals)
+        combined_matrix.append(lfps.magnitude)
+    sampl_freq = sorted(sampl_freq, reverse=True)
+    if len(sampl_freq) > 1:
+        warnings.warn("AnalogSignals have different sampling rates: "
+                      "{rates}. Chose the highest one.".format(
+                       rates=sampl_freq))
     combined_matrix = np.stack(combined_matrix, axis=1)
+    if combined_matrix.shape[1] == 1:
+        combined_matrix = np.squeeze(combined_matrix, axis=1)
+    print("Time series Multitaper input shape "
+          "(n_time_samples, n_trials, n_signals): {shape}".format(
+           shape=combined_matrix.shape))
     multitaper = Multitaper(combined_matrix,
-                            sampling_frequency=sampl_freq)
+                            sampling_frequency=sampl_freq[0],
+                            time_halfbandwidth_product=3)
     connectivity = Connectivity.from_multitaper(multitaper)
     granger = connectivity.pairwise_spectral_granger_prediction()
-    return granger
+    return granger, connectivity.frequencies
