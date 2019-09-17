@@ -31,15 +31,15 @@ def multitaper_from_analog_signals(analog_signals, **kwargs):
     # combined_matrix = np.zeros((n_time_samples, n_trials, n_signals))
     combined_matrix = []
     for trial in analog_signals:
-        # some AnalogSignals might have a shape of (n_time_samples, 1)
-        if isinstance(trial, neo.AnalogSignal) and trial.ndim == 2 \
-                and trial.shape[1] > 1:
+        if isinstance(trial, neo.AnalogSignal):
             lfps = trial
             sampl_freq.add(rate_in_hz(trial.sampling_rate))
+            if trial.ndim == 2 and trial.shape[1] == 1:
+                # some AnalogSignals might have a shape of (n_time_samples, 1)
+                lfps = np.hstack(trial)
         else:
-            # stack a list of AnalogSignals column wise
-            sampl_freq.add(rate_in_hz(trial[0].sampling_rate))
             lfps = np.hstack(trial)
+            sampl_freq.add(rate_in_hz(trial[0].sampling_rate))
         # lfps shape: (n_time_samples, n_signals)
         combined_matrix.append(lfps.magnitude)
     sampl_freq = sorted(sampl_freq)

@@ -82,6 +82,9 @@ def pairwise_granger_causality(multitaper, labels=None, freq_lim=None):
             "computing Granger causality across all time points at once.")
     for signal1_id in range(granger.shape[2]):
         for signal2_id in range(granger.shape[3]):
+            if signal1_id == signal2_id:
+                # Granger self-to-self prediction does not make sense
+                continue
             ax = plt.subplot(n_signals, n_signals,
                              signal1_id * n_signals + signal2_id + 1)
             ax.plot(connectivity.frequencies,
@@ -91,8 +94,7 @@ def pairwise_granger_causality(multitaper, labels=None, freq_lim=None):
             if labels is not None:
                 ax.set_title("{label1} -> {label2}".format(
                     label1=labels[signal1_id], label2=labels[signal2_id]))
-            if freq_lim is not None:
-                ax.set_xlim(right=freq_lim)
+            ax.set_xlim(right=freq_lim)
     plt.tight_layout()
     plt.show()
 
@@ -145,7 +147,7 @@ def granger_example_v4a():
             segments_cut[area_name].extend(lfps)
     analog_signal_trials = zip(segments_cut['visual'], segments_cut['motor'])
     multitaper = multitaper_from_analog_signals(analog_signal_trials)
-    pairwise_granger_causality(multitaper, freq_lim=100)
+    pairwise_granger_causality(multitaper, freq_lim=None)
 
 
 def granger_example_resting_state():
@@ -154,12 +156,12 @@ def granger_example_resting_state():
     block = f.read_block()
     analog_signals = block.filter(objects="AnalogSignal")
     # take first 2 signals (channels), for example
-    analog_signals = analog_signals[:2]
+    analog_signals = analog_signals[:3]
     analog_signals = [asig[:10000] for asig in analog_signals]
     multitaper = multitaper_from_analog_signals(analog_signals)
     pairwise_granger_causality(multitaper)
 
 
 if __name__ == '__main__':
-    # granger_resting_state()
-    granger_example_v4a()
+    granger_example_resting_state()
+    # granger_example_v4a()
