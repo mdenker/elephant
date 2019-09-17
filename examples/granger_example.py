@@ -4,10 +4,12 @@ import warnings
 import matplotlib.pyplot as plt
 import neo
 import quantities as pq
+from spectral_connectivity.connectivity import Connectivity
+from spectral_connectivity.transforms import Multitaper
 
-from elephant.granger import pairwise_granger_causality
 from elephant.load_routine import add_epoch, cut_segment_by_epoch, \
     get_events
+from elephant.multitaper import multitaper_from_analog_signals
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
@@ -42,7 +44,63 @@ def get_interesting_events(block, labels_of_interest):
     return interesting_events
 
 
-def granger_example():
+def pairwise_granger_causality(multitaper, labels=None, freq_lim=None):
+    """
+    Plots pairwise Granger causality.
+
+    Parameters
+    ----------
+    multitaper: Multitaper
+        Multitaper object, used next in `Connectivity.from_multitaper()` to
+        estimate power spectrum, Granger causality, etc., in frequency domain.
+    labels: list, optional
+        List of signal names, corresponding to `multitaper` time series.
+        Its length should match `multitaper.n_signals`.
+    freq_lim: float, optional
+        Limit frequency range of X-axis to this maximum frequency.
+    """
+    print("Time series Multitaper input shape "
+          "(n_time_samples, n_trials, n_signals): {shape}".format(
+           shape=multitaper.time_series.shape))
+    connectivity = Connectivity.from_multitaper(multitaper)
+
+    granger = connectivity.pairwise_spectral_granger_prediction()
+    # `n_frequencies` depends on the arguments, specified in `multitaper`.
+    print("Granger causality shape (n_time_windows, n_frequencies, n_signals,"
+          " n_signals): {shape}".format(shape=granger.shape))
+    assert granger.shape[2] == granger.shape[3], \
+        "Granger matrix should have symmetric shape"
+    n_signals = granger.shape[2]
+    if labels is not None and len(labels) != n_signals:
+        raise ValueError("Labels length should match the Granger `n_signals`,"
+                         "which is the same as `multitaper.n_signals`")
+
+    if granger.shape[0] > 1:
+        warnings.warn(
+            "Granger causality has multiple time windows (n_time_windows > 1)."
+            "Plotting the causalities in the first window only. Consider"
+            "computing Granger causality across all time points at once.")
+    for signal1_id in range(granger.shape[2]):
+        for signal2_id in range(granger.shape[3]):
+            ax = plt.subplot(n_signals, n_signals,
+                             signal1_id * n_signals + signal2_id + 1)
+            ax.plot(connectivity.frequencies,
+                    granger[0, :, signal1_id, signal2_id].T)
+            ax.set_xlabel('Frequency')
+            ax.set_ylabel('Causality')
+            if labels is not None:
+                ax.set_title("{label1} -> {label2}".format(
+                    label1=labels[signal1_id], label2=labels[signal2_id]))
+            if freq_lim is not None:
+                ax.set_xlim(right=freq_lim)
+    plt.tight_layout()
+    plt.show()
+
+
+def granger_example_v4a():
+    """
+    Granger example for Visual for Action data.
+    """
     channels = {
         'motor': 2,  # M1
         'visual': 24  # V1
@@ -82,45 +140,26 @@ def granger_example():
                 segment_trial, epochs=target_on_epochs,
                 annotations=block.annotations)
             lfps = block_cut.filter(signal_type="LFP", objects="AnalogSignal")
-            # select the channel
+            # select the channel of interest
             lfps = [lfp[:, channels[area_name]] for lfp in lfps]
             segments_cut[area_name].extend(lfps)
-    analog_signal_trials = zip(*segments_cut.values())
-    granger, freq = pairwise_granger_causality(analog_signal_trials)
-    plot_causalities(granger, freq)
+    analog_signal_trials = zip(segments_cut['visual'], segments_cut['motor'])
+    multitaper = multitaper_from_analog_signals(analog_signal_trials)
+    pairwise_granger_causality(multitaper, freq_lim=100)
 
 
-def granger_resting_state():
+def granger_example_resting_state():
     fpath = os.path.join(DATA_DIR, "block_rst.pkl")
     f = neo.io.PickleIO(fpath)
     block = f.read_block()
     analog_signals = block.filter(objects="AnalogSignal")
-    # take first 2 signals (channels)
+    # take first 2 signals (channels), for example
     analog_signals = analog_signals[:2]
     analog_signals = [asig[:10000] for asig in analog_signals]
-    granger, freq = pairwise_granger_causality([analog_signals])
-    plot_causalities(granger, freq)
-
-
-def plot_causalities(granger, frequencies):
-    n_signals = granger.shape[2]
-    if granger.shape[0] > 1:
-        warnings.warn(
-            "Granger causality has multiple time windows (n_time_windows > 1)."
-            "Plotting the causalities in the first window only. Consider"
-            "computing Granger causality across all time points at once.")
-    for signal1_id in range(granger.shape[-1]):
-        for signal2_id in range(granger.shape[-1]):
-            ax = plt.subplot(n_signals, n_signals,
-                             signal1_id * n_signals + signal2_id + 1)
-            ax.plot(frequencies, granger[0, :, signal1_id, signal2_id].T)
-            ax.set_xlabel('Frequency')
-            ax.set_ylabel('Causality')
-            ax.set_xlim([0, 100])
-    plt.tight_layout()
-    plt.show()
+    multitaper = multitaper_from_analog_signals(analog_signals)
+    pairwise_granger_causality(multitaper)
 
 
 if __name__ == '__main__':
     # granger_resting_state()
-    granger_example()
+    granger_example_v4a()
