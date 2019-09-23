@@ -4,8 +4,10 @@ import warnings
 import matplotlib.pyplot as plt
 import neo
 import quantities as pq
+import numpy as np
 from spectral_connectivity.connectivity import Connectivity
 from spectral_connectivity.transforms import Multitaper
+from tqdm import tqdm
 
 from elephant.load_routine import add_epoch, cut_segment_by_epoch, \
     get_events
@@ -44,27 +46,23 @@ def get_interesting_events(block, labels_of_interest):
     return interesting_events
 
 
-def pairwise_granger_causality(multitaper, labels=None, freq_lim=None):
+def plot_pairwise_granger_causality(granger, frequencies, labels=None,
+                                    freq_lim=None):
     """
     Plots pairwise Granger causality.
 
     Parameters
     ----------
-    multitaper: Multitaper
-        Multitaper object, used next in `Connectivity.from_multitaper()` to
-        estimate power spectrum, Granger causality, etc., in frequency domain.
+    granger: np.ndarray
+        Granger causality matrix of shape
+        (n_time_windows, n_frequencies, n_signals, n_signals).
+    frequencies: np.ndarray
     labels: list, optional
         List of signal names, corresponding to `multitaper` time series.
         Its length should match `multitaper.n_signals`.
     freq_lim: float, optional
         Limit frequency range of X-axis to this maximum frequency.
     """
-    print("Time series Multitaper input shape "
-          "(n_time_samples, n_trials, n_signals): {shape}".format(
-           shape=multitaper.time_series.shape))
-    connectivity = Connectivity.from_multitaper(multitaper)
-
-    granger = connectivity.pairwise_spectral_granger_prediction()
     # `n_frequencies` depends on the arguments, specified in `multitaper`.
     print("Granger causality shape (n_time_windows, n_frequencies, n_signals,"
           " n_signals): {shape}".format(shape=granger.shape))
@@ -87,27 +85,19 @@ def pairwise_granger_causality(multitaper, labels=None, freq_lim=None):
                 continue
             ax = plt.subplot(n_signals, n_signals,
                              signal1_id * n_signals + signal2_id + 1)
-            ax.plot(connectivity.frequencies,
+            ax.plot(frequencies,
                     granger[0, :, signal1_id, signal2_id].T)
             ax.set_xlabel('Frequency')
             ax.set_ylabel('Causality')
             if labels is not None:
                 ax.set_title("{label1} -> {label2}".format(
                     label1=labels[signal1_id], label2=labels[signal2_id]))
-            ax.set_xlim(right=freq_lim)
+            ax.set_xlim([0, freq_lim])
     plt.tight_layout()
     plt.show()
 
 
-def granger_example_v4a():
-    """
-    Granger example for Visual for Action data.
-    """
-    channels = {
-        'motor': 2,  # M1
-        'visual': 24  # V1
-    }
-
+def get_segmented_lfps():
     # fixme: does not work if labels_of_interest is a tuple!
     labels_of_interest = ['target_02_on', 'target_03_on', 'target_04_on']
 
@@ -142,12 +132,71 @@ def granger_example_v4a():
                 segment_trial, epochs=target_on_epochs,
                 annotations=block.annotations)
             lfps = block_cut.filter(signal_type="LFP", objects="AnalogSignal")
-            # select the channel of interest
-            lfps = [lfp[:, channels[area_name]] for lfp in lfps]
             segments_cut[area_name].extend(lfps)
-    analog_signal_trials = zip(segments_cut['visual'], segments_cut['motor'])
+    return segments_cut
+
+
+def _granger_from_segments(segments1, segments2):
+    analog_signal_trials = zip(segments1, segments2)
     multitaper = multitaper_from_analog_signals(analog_signal_trials)
-    pairwise_granger_causality(multitaper, freq_lim=None)
+    connectivity = Connectivity.from_multitaper(multitaper)
+    granger = connectivity.pairwise_spectral_granger_prediction()
+    return granger, connectivity.frequencies
+
+
+def granger_example_v4a():
+    """
+    Granger example for Visual for Action data.
+    """
+    channels = {
+        'motor': 2,  # M1
+        'visual': 24  # V1
+    }
+
+    segments_cut = get_segmented_lfps()
+    for area_name, segments_area in segments_cut.items():
+        segments_cut[area_name] = [lfp[:, channels[area_name]]
+                                   for lfp in segments_cut[area_name]]
+    granger, freq = _granger_from_segments(segments_cut['visual'],
+                                           segments_cut['motor'])
+    plot_pairwise_granger_causality(granger, freq,
+                                    labels=['visual', 'motor'],
+                                    freq_lim=100)
+
+
+def granger_example_v4a_average_channels():
+    """
+    Granger example for Visual for Action data.
+    """
+    channels = {
+        "motor": 56,
+        "visual": list(range(128))
+    }
+
+    segments_cut = get_segmented_lfps()
+    segments_cut["motor"] = [lfp[:, channels["motor"]]
+                             for lfp in segments_cut["motor"]]
+    granger_channels = []
+    frequency_channels = []
+    for visual_channel_id in tqdm(channels["visual"],
+                                  desc="Computing Granger causalities"):
+        vis_segments_channel = [trial[:, visual_channel_id] for trial in
+                                segments_cut['visual']]
+        granger, freq = _granger_from_segments(vis_segments_channel,
+                                               segments_cut['motor'])
+        granger_channels.append(granger)
+        frequency_channels.append(freq)
+    granger_result = np.max(granger_channels, axis=0)
+    granger_std = np.std(granger_channels, axis=0)
+    granger_std += 1e-3  # to avoid division by zero
+
+    # assert all frequencies match
+    np.allclose(frequency_channels, frequency_channels[0])
+
+    plot_pairwise_granger_causality(granger_result,
+                                    frequencies=frequency_channels[0],
+                                    labels=['visual', 'motor'],
+                                    freq_lim=100)
 
 
 def granger_example_resting_state():
@@ -159,9 +208,11 @@ def granger_example_resting_state():
     analog_signals = analog_signals[:3]
     analog_signals = [asig[:10000] for asig in analog_signals]
     multitaper = multitaper_from_analog_signals(analog_signals)
-    pairwise_granger_causality(multitaper)
+    connectivity = Connectivity.from_multitaper(multitaper)
+    granger = connectivity.pairwise_spectral_granger_prediction()
+    plot_pairwise_granger_causality(granger, connectivity.frequencies)
 
 
 if __name__ == '__main__':
-    granger_example_resting_state()
-    # granger_example_v4a()
+    # granger_example_resting_state()
+    granger_example_v4a_average_channels()
