@@ -47,7 +47,7 @@ def get_interesting_events(block, labels_of_interest):
 
 
 def plot_pairwise_granger_causality(granger, frequencies, labels=None,
-                                    freq_lim=None):
+                                    xlim=None, ylim=None):
     """
     Plots pairwise Granger causality.
 
@@ -60,7 +60,7 @@ def plot_pairwise_granger_causality(granger, frequencies, labels=None,
     labels: list, optional
         List of signal names, corresponding to `multitaper` time series.
         Its length should match `multitaper.n_signals`.
-    freq_lim: float, optional
+    xlim: float, optional
         Limit frequency range of X-axis to this maximum frequency.
     """
     # `n_frequencies` depends on the arguments, specified in `multitaper`.
@@ -90,9 +90,10 @@ def plot_pairwise_granger_causality(granger, frequencies, labels=None,
             ax.set_xlabel('Frequency')
             ax.set_ylabel('Causality')
             if labels is not None:
-                ax.set_title("{label1} -> {label2}".format(
-                    label1=labels[signal1_id], label2=labels[signal2_id]))
-            ax.set_xlim([0, freq_lim])
+                ax.set_title("{label2} -> {label1}".format(
+                    label2=labels[signal2_id], label1=labels[signal1_id]))
+            ax.set_xlim([0, xlim])
+            ax.set_ylim(top=ylim)
     plt.tight_layout()
     plt.show()
 
@@ -161,7 +162,7 @@ def granger_example_v4a():
                                            segments_cut['motor'])
     plot_pairwise_granger_causality(granger, freq,
                                     labels=['visual', 'motor'],
-                                    freq_lim=100)
+                                    xlim=100)
 
 
 def granger_example_v4a_average_channels():
@@ -196,7 +197,7 @@ def granger_example_v4a_average_channels():
     plot_pairwise_granger_causality(granger_result,
                                     frequencies=frequency_channels[0],
                                     labels=['visual', 'motor'],
-                                    freq_lim=100)
+                                    xlim=100)
 
 
 def granger_example_resting_state():

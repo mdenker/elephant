@@ -5,6 +5,9 @@ from spectral_connectivity import Multitaper
 
 def multitaper_from_analog_signals(analog_signals, **kwargs):
     """
+    Constructs a matrix of (n_time_samples, n_trials, n_signals) and passes
+    it to `Multitaper`.
+
     Parameters
     ----------
     analog_signals: list
@@ -27,8 +30,6 @@ def multitaper_from_analog_signals(analog_signals, **kwargs):
     """
     sampl_freq = set()
     rate_in_hz = lambda rate: float(rate.rescale('Hz').magnitude)
-
-    # combined_matrix = np.zeros((n_time_samples, n_trials, n_signals))
     combined_matrix = []
     for trial in analog_signals:
         if isinstance(trial, neo.AnalogSignal):
