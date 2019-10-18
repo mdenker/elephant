@@ -769,11 +769,35 @@ def derivative(signal):
 
 
 def detrending(signal, order=2):
-    # ToDo: deal with multi-channel AnalogSignal
-    # ToDo: improve efficiency
-    # ToDo: write docstring
-    # ToDo: window options in wrapper function?
+    '''
+    Performs a detrending of an AnalogSignal.
 
+    Parameters
+    ----------
+    signal : neo.AnalogSignal, Quantity array, or NumPy ndarray
+        The signal to detrend. If `signal` contains more than one
+        channel, each is detrended separately.
+
+    order  : int
+        Detrending order.
+            0 - no detrending;
+            1 - mean detrending;
+            2 - mean and slope detrending (linear) (default)
+            3 - quadratic detrending.
+            4 - cubic detrending.
+
+    Returns
+    -------
+    AnalogSignal or Quantity array or NumPy ndarray
+        Detrended input data. The shape and type is identical to those of
+        the input.
+
+    Raises
+    ------
+    TypeError
+        If the input signal is not a neo.AnalogSignal, Quantity array,
+        or NumPy array; or if order is not an int between 0 and 4.
+    '''
     if isinstance(signal, neo.AnalogSignal):
         X = signal.as_array()
     elif isinstance(signal, pq.quantity.Quantity):
@@ -783,21 +807,30 @@ def detrending(signal, order=2):
     else:
         raise TypeError('Input signal must be either an AnalogSignal,'
                       + 'a quantity array, or a numpy array.')
+    if not type(order) == int:
+        raise TypeError("Detrending order needs to be of type int.")
+    if order < 0 or order > 4:
+        raise InputError("Detrending order must be between 0 and 4!")
 
-    window = len(signal)
+    dim_t, num_channels = signal.shape
+    window_size = len(signal)
+
     if order > 0:
         X = X - np.mean(X, axis=0)
     if order > 1:
         factor = [1, 1/2., 1/6.]
-        for i in np.arange(order-1)+1:
-            detrend = np.linspace(-window/2., window/2., window)**i \
-                    * np.mean(np.diff(X, n=i, axis=0)) * factor[i-1]
+        for i in np.arange(2, order):
+            detrend = np.zeros_like(X)
+            for channel, x in enumerate(X.T):
+                detrend[:,channel] =\
+                    np.linspace(-window_size/2., window_size/2., window_size)**i \
+                    * np.mean(np.diff(x, n=i)) * factor[i-2]
             X = X - detrend
 
     if isinstance(signal, neo.AnalogSignal):
-        return neo.AnalogSignal(X, t_start=signal.t_start, t_stop=signal.t_stop,
-                                sampling_period=signal.sampling_period,
-                                **signal.annotations, **signal.array_annotations)
+        signal_out = signal.duplicate_with_new_data(X)
+        signal_out.array_annotate(**signal.array_annotations)
+        return signal_out
     elif isinstance(signal, pq.quantity.Quantity):
         return X * signal.units
     elif isinstance(signal, np.ndarray):
