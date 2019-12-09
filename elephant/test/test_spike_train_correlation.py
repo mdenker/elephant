@@ -6,18 +6,23 @@ Unit tests for the spike_train_correlation module.
 :license: Modified BSD, see LICENSE.txt for details.
 """
 
+import sys
 import unittest
 
-import numpy as np
-from numpy.testing.utils import assert_array_equal, assert_array_almost_equal
-import quantities as pq
 import neo
+import numpy as np
+import quantities as pq
+from numpy.testing.utils import assert_array_equal, assert_array_almost_equal
+
 import elephant.conversion as conv
 import elephant.spike_train_correlation as sc
-import warnings
+from elephant.spike_train_generation import homogeneous_poisson_process,\
+    homogeneous_gamma_process
+
+python_version_major = sys.version_info.major
 
 
-class covariance_TestCase(unittest.TestCase):
+class CovarianceTestCase(unittest.TestCase):
 
     def setUp(self):
         # These two arrays must be such that they do not have coincidences
@@ -45,9 +50,9 @@ class covariance_TestCase(unittest.TestCase):
 
         # Calculate clipped and unclipped
         res_clipped = sc.covariance(
-            self.binned_st, binary=True)
+            self.binned_st, binary=True, fast=False)
         res_unclipped = sc.covariance(
-            self.binned_st, binary=False)
+            self.binned_st, binary=False, fast=False)
 
         # Check dimensions
         self.assertEqual(len(res_clipped), 2)
@@ -92,12 +97,12 @@ class covariance_TestCase(unittest.TestCase):
         binned_st = conv.BinnedSpikeTrain(
             [self.st_0, self.st_0], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.covariance(binned_st)
+        result = sc.covariance(binned_st, fast=False)
 
         # Check dimensions
-        self.assertEqual(len(target), 2)
+        self.assertEqual(len(result), 2)
         # Check result
-        assert_array_equal(target[0][0], target[1][1])
+        assert_array_equal(result[0][0], result[1][1])
 
     def test_covariance_binned_short_input(self):
         '''
@@ -108,18 +113,28 @@ class covariance_TestCase(unittest.TestCase):
         binned_st = conv.BinnedSpikeTrain(
             self.st_0, t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.covariance(binned_st)
+        result = sc.covariance(binned_st, binary=True, fast=False)
 
         # Check result unclipped against result calculated by numpy.corrcoef
         mat = binned_st.to_bool_array()
-        target_numpy = np.cov(mat)
+        target = np.cov(mat)
 
         # Check result and dimensionality of result
-        self.assertEqual(target.ndim, target_numpy.ndim)
-        self.assertAlmostEqual(target, target_numpy)
+        self.assertEqual(result.ndim, target.ndim)
+        assert_array_almost_equal(result, target)
+        assert_array_almost_equal(target,
+                                  sc.covariance(binned_st, binary=True,
+                                                fast=True))
+
+    def test_covariance_fast_mode(self):
+        np.random.seed(27)
+        st = homogeneous_poisson_process(rate=10 * pq.Hz, t_stop=10 * pq.s)
+        binned_st = conv.BinnedSpikeTrain(st, num_bins=10)
+        assert_array_almost_equal(sc.covariance(binned_st, fast=False),
+                                  sc.covariance(binned_st, fast=True))
 
 
-class corrcoeff_TestCase(unittest.TestCase):
+class CorrCoefTestCase(unittest.TestCase):
 
     def setUp(self):
         # These two arrays must be such that they do not have coincidences
@@ -203,12 +218,14 @@ class corrcoeff_TestCase(unittest.TestCase):
         binned_st = conv.BinnedSpikeTrain(
             [self.st_0, self.st_0], t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.corrcoef(binned_st)
+        result = sc.corrcoef(binned_st, fast=False)
+        target = np.ones((2, 2))
 
         # Check dimensions
-        self.assertEqual(len(target), 2)
+        self.assertEqual(len(result), 2)
         # Check result
-        assert_array_equal(target, 1.)
+        assert_array_almost_equal(result, target)
+        assert_array_almost_equal(result, sc.corrcoef(binned_st, fast=True))
 
     def test_corrcoef_binned_short_input(self):
         '''
@@ -218,12 +235,15 @@ class corrcoeff_TestCase(unittest.TestCase):
         binned_st = conv.BinnedSpikeTrain(
             self.st_0, t_start=0 * pq.ms, t_stop=50. * pq.ms,
             binsize=1 * pq.ms)
-        target = sc.corrcoef(binned_st)
+        result = sc.corrcoef(binned_st, fast=False)
+        target = np.array(1.)
 
         # Check result and dimensionality of result
-        self.assertEqual(target.ndim, 0)
-        self.assertEqual(target, 1.)
+        self.assertEqual(result.ndim, 0)
+        assert_array_almost_equal(result, target)
+        assert_array_almost_equal(result, sc.corrcoef(binned_st, fast=True))
 
+    @unittest.skipUnless(python_version_major == 3, "assertWarns requires 3.2")
     def test_empty_spike_train(self):
         '''
         Test whether a warning is yielded in case of empty spike train.
@@ -233,16 +253,21 @@ class corrcoeff_TestCase(unittest.TestCase):
         binned_12 = conv.BinnedSpikeTrain([self.st_1, self.st_2],
                                           binsize=1 * pq.ms)
 
-        # test for a warning
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            ccmat = sc.corrcoef(binned_12)
-            self.assertTrue(issubclass(w.pop().category, UserWarning))
+        with self.assertWarns(UserWarning):
+            result = sc.corrcoef(binned_12, fast=False)
 
         # test for NaNs in the output array
         target = np.zeros((2, 2)) * np.NaN
-        target[0,0] = 1.0
-        assert_array_equal(ccmat, target)
+        target[0, 0] = 1.0
+        assert_array_almost_equal(result, target)
+
+    def test_corrcoef_fast_mode(self):
+        np.random.seed(27)
+        st = homogeneous_poisson_process(rate=10 * pq.Hz, t_stop=10 * pq.s)
+        binned_st = conv.BinnedSpikeTrain(st, num_bins=10)
+        assert_array_almost_equal(sc.corrcoef(binned_st, fast=False),
+                                  sc.corrcoef(binned_st, fast=True))
+
 
 class cross_correlation_histogram_TestCase(unittest.TestCase):
 
@@ -367,7 +392,7 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
                                 cross_corr_coef=True)
             left_edge = - binned_st1.num_bins + 1
             tau_bin = int(t / float(binned_st1.binsize.magnitude))
-            assert_array_equal(
+            assert_array_almost_equal(
                 corrcoef, CCHcoef[tau_bin - left_edge].magnitude)
 
         # Check correlation using binary spike trains
@@ -444,10 +469,10 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
 
         # Check for wrong window parameter setting
         self.assertRaises(
-            KeyError, sc.cross_correlation_histogram, self.binned_st1,
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window='dsaij')
         self.assertRaises(
-            KeyError, sc.cross_correlation_histogram, self.binned_st1,
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window='dsaij', method='memory')
 
     def test_raising_error_wrong_inputs(self):
@@ -455,22 +480,22 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         fullfilling the requirement of the function'''
         # Check the binsizes are the same
         self.assertRaises(
-            AssertionError,
+            ValueError,
             sc.cross_correlation_histogram, self.binned_st1,
             self.st_check_binsize)
         # Check different t_start and t_stop
         self.assertRaises(
-            AssertionError, sc.cross_correlation_histogram,
+            ValueError, sc.cross_correlation_histogram,
             self.st_check_t_start, self.binned_st2)
         self.assertRaises(
-            AssertionError, sc.cross_correlation_histogram,
+            ValueError, sc.cross_correlation_histogram,
             self.st_check_t_stop, self.binned_st2)
         # Check input are one dimensional
         self.assertRaises(
-            AssertionError, sc.cross_correlation_histogram,
+            ValueError, sc.cross_correlation_histogram,
             self.st_check_dimension, self.binned_st2)
         self.assertRaises(
-            AssertionError, sc.cross_correlation_histogram,
+            ValueError, sc.cross_correlation_histogram,
             self.binned_st2, self.st_check_dimension)
 
     def test_window(self):
@@ -521,10 +546,10 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             self.binned_st2, window=[-50, 60])
         # Test for no integer or wrong string in input
         self.assertRaises(
-            KeyError, sc.cross_correlation_histogram, self.binned_st1,
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window=[-25.5, 25.5])
         self.assertRaises(
-            KeyError, sc.cross_correlation_histogram, self.binned_st1,
+            ValueError, sc.cross_correlation_histogram, self.binned_st1,
             self.binned_st2, window='test')
 
     def test_border_correction(self):
@@ -545,7 +570,8 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
             method='memory')
 
         self.assertEqual(np.any(np.not_equal(cch, cch_corrected)), True)
-        self.assertEqual(np.any(np.not_equal(cch_mem, cch_corrected_mem)), True)
+        self.assertEqual(np.any(np.not_equal(cch_mem, cch_corrected_mem)),
+                         True)
 
     def test_kernel(self):
         '''Test if the smoothing kernel is correctly defined, and wheter it is
@@ -570,12 +596,6 @@ class cross_correlation_histogram_TestCase(unittest.TestCase):
         self.assertRaises(
             ValueError, sc.cch, self.binned_st1, self.binned_st2,
             kernel=np.ones(100), method='memory')
-
-        self.assertRaises(
-            ValueError, sc.cch, self.binned_st1, self.binned_st2, kernel='BOX')
-        self.assertRaises(
-            ValueError, sc.cch, self.binned_st1, self.binned_st2, kernel='BOX',
-            method='memory')
 
     def test_exist_alias(self):
         '''
@@ -627,7 +647,7 @@ class SpikeTimeTilingCoefficientTestCase(unittest.TestCase):
 
         # test for TA = PB = 1 but TB /= PA /= 1 and vice versa
         st3 = neo.SpikeTrain([1, 5, 9], units='ms', t_stop=10.)
-        target2 = 1./3.
+        target2 = 1. / 3.
         self.assertAlmostEqual(target2, sc.sttc(st3, st2,
                                                 0.003 * pq.s))
         self.assertAlmostEqual(target2, sc.sttc(st2, st3,
@@ -636,6 +656,38 @@ class SpikeTimeTilingCoefficientTestCase(unittest.TestCase):
     def test_exist_alias(self):
         # Test if alias cch still exists.
         self.assertEqual(sc.spike_time_tiling_coefficient, sc.sttc)
+
+
+class SpikeTrainTimescaleTestCase(unittest.TestCase):
+
+    def test_timescale_calculation(self):
+        '''
+        Test the timescale generation using an alpha-shaped ISI distribution,
+        see [1, eq. 1.68]. This is equivalent to a homogeneous gamma process
+        with alpha=2 and beta=2*nu where nu is the rate.
+
+        For this process, the autocorrelation function is given by a sum of a
+        delta peak and a (negative) exponential, see [1, eq. 1.69].
+        The exponential decays with \tau_corr = 1 / (4*nu), thus this fixes
+        timescale.
+
+        [1] Lindner, B. (2009). A brief introduction to some simple stochastic
+            processes. Stochastic Methods in Neuroscience, 1.
+        '''
+        nu = 25 / pq.s
+        T = 15 * pq.min
+        binsize = 1 * pq.ms
+        timescale = 1 / (4 * nu)
+
+        timescale_num = []
+        for _ in range(10):
+            spikes = homogeneous_gamma_process(2, 2 * nu, 0 * pq.ms, T)
+            spikes_bin = conv.BinnedSpikeTrain(spikes, binsize)
+            timescale_i = sc.spike_train_timescale(spikes_bin, 10 * timescale)
+            timescale_i.units = timescale.units
+            timescale_num.append(timescale_i.magnitude)
+        target = np.allclose(timescale.magnitude, timescale_num, rtol=2e-1)
+        self.assertTrue(target)
 
 
 if __name__ == '__main__':
