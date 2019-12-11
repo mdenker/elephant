@@ -53,7 +53,7 @@ class MultitaperTest(unittest.TestCase):
         for trial in self.analog_signals:
             trial_list = [neo.AnalogSignal(
                 sig, units=trial.units, sampling_rate=trial.sampling_rate) for
-                sig in trial]
+                sig in trial.T]
             analog_signals_lists.append(trial_list)
         multitaper = multitaper_from_analog_signals(analog_signals_lists)
         assert_array_almost_equal(multitaper.time_series, self.target)

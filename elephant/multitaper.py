@@ -42,7 +42,7 @@ def multitaper_from_analog_signals(analog_signals, **kwargs):
         elif len(trial) > 0 and isinstance(trial[0], neo.AnalogSignal):
             # a list of AnalogSignals of shape (n_time_samples, 1)
             sample_freq.add(rate_in_hz(trial[0].sampling_rate))
-            lfps = np.stack([sig.magnitude for sig in trial], axis=0)
+            lfps = np.stack([sig.magnitude for sig in trial], axis=1)
             lfps = np.squeeze(lfps)
         else:
             raise ValueError("Trials should be of type neo.AnalogSignal")
