@@ -214,11 +214,11 @@ def lv(v, with_nan=False):
 
     v : quantity array, numpy array or list
         Vector of consecutive time intervals
-        
+
     with_nans : bool, optional
-        If `True`, lv of an spike train with less than two spikes 
-        results in a `NaN` value and a warning is raised. 
-        If `False`, an value error is raised. 
+        If `True`, lv of an spike train with less than two spikes
+        results in a `NaN` value and a warning is raised.
+        If `False`, an value error is raised.
         Default: `True`
 
     Returns
@@ -270,7 +270,7 @@ def lv(v, with_nan=False):
 
 def cv2(v, with_nan=False):
     """
-    Calculate the measure of CV2 for a sequence of time intervals between 
+    Calculate the measure of CV2 for a sequence of time intervals between
     events.
 
     Given a vector v containing a sequence of intervals, the CV2 is
@@ -293,9 +293,9 @@ def cv2(v, with_nan=False):
         Vector of consecutive time intervals
 
     with_nans : bool, optional
-        If `True`, cv2 with less than two spikes results in a `NaN` value 
-        and a warning is raised. 
-        If `False`, an attribute error is raised. 
+        If `True`, cv2 with less than two spikes results in a `NaN` value
+        and a warning is raised.
+        If `False`, an attribute error is raised.
         Default: `True`
 
     Returns
@@ -314,8 +314,8 @@ def cv2(v, with_nan=False):
 
     References
     ----------
-    ..[1] Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996). 
-    Comparison of discharge variability in vitro and in vivo in cat visual 
+    ..[1] Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996).
+    Comparison of discharge variability in vitro and in vivo in cat visual
     cortex neurons. Journal of neurophysiology, 75(5), 1806-1814.
     """
     # convert to array, cast to float
@@ -610,7 +610,7 @@ def instantaneous_rate(spiketrain, sampling_period, kernel='auto',
     Example
     --------
     kernel = kernels.AlphaKernel(sigma = 0.05*s, invert = True)
-    rate = instantaneous_rate(spiketrain, sampling_period = 2*ms, kernel)
+    rate = instantaneous_rate(spiketrain, sampling_period = 2*ms, kernel=kernel)
 
     References
     ----------
