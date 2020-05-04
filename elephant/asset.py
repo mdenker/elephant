@@ -388,7 +388,7 @@ def _interpolate_signals(signals, sampling_times, verbose=False):
     return interpolated_signal
 
 
-def num_iterations(n, d):
+def _num_iterations(n, d):
 
     def accumulate_num_iterations(cur_d, max_n):
         if cur_d > 1:
@@ -403,25 +403,25 @@ def num_iterations(n, d):
     return accumulate_num_iterations(d, n)
 
 
-def indices_subgenerator(index, range_object, *values):
+def _indices_subgenerator(index, range_object, *values):
     if index > 1:
         for value in range_object:
             next_index = index - 1
-            yield from indices_subgenerator(next_index,
-                                            range(next_index, value + 1),
-                                            *values, value)
+            yield from _indices_subgenerator(next_index,
+                                             range(next_index, value + 1),
+                                             *values, value)
     else:
         for value in range_object:
             result = *values, value
             yield result
 
 
-def iterate_indices(n, d):
+def _iterate_indices(n, d):
     main_index = range(d, n + 1)
     if d > 1:
         for value in main_index:
             next_index = d - 1
-            yield from indices_subgenerator(
+            yield from _indices_subgenerator(
                 next_index, range(next_index, value + 1), value
             )
     else:
@@ -472,7 +472,7 @@ def _jsf_uniform_orderstat_3d(u, n, verbose=False):
 
     # Define ranges [1,...,n], [2,...,n], ..., [d,...,n] for the mute variables
     # used to compute the integral as a sum over all possibilities
-    it_todo = num_iterations(n, d)
+    it_todo = _num_iterations(n, d)
 
     log_1 = np.log(1.)
     # Compute the log of the integral's coefficient
@@ -505,7 +505,7 @@ def _jsf_uniform_orderstat_3d(u, n, verbose=False):
     # initialise probabilities to 0
     P_total = np.zeros(du.shape[0], dtype=np.float32)
     iter_id = 0
-    for matrix_entries in tqdm(iterate_indices(n, d),
+    for matrix_entries in tqdm(_iterate_indices(n, d),
                                total=it_todo,
                                desc="Joint survival function",
                                disable=not verbose):
