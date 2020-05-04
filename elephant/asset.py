@@ -388,13 +388,45 @@ def _interpolate_signals(signals, sampling_times, verbose=False):
     return interpolated_signal
 
 
-def _wrong_order(a):
-    if a[-1] > a[0]:
-        return True
-    for i in range(len(a) - 1):
-        if a[i] < a[i + 1]:
-            return True
-    return False
+def num_iterations(n, d):
+
+    def accumulate_num_iterations(cur_d, max_n):
+        if cur_d > 1:
+            sum = 0
+            for cur_value in range(cur_d, max_n + 1):
+                next_d = cur_d - 1
+                sum += accumulate_num_iterations(next_d, cur_value)
+            return sum
+        else:
+            return len(range(cur_d, max_n + 1))
+
+    return accumulate_num_iterations(d, n)
+
+
+def indices_subgenerator(index, range_object, *values):
+    if index > 1:
+        for value in range_object:
+            next_index = index - 1
+            yield from indices_subgenerator(next_index,
+                                            range(next_index, value + 1),
+                                            *values, value)
+    else:
+        for value in range_object:
+            result = *values, value
+            yield result
+
+
+def iterate_indices(n, d):
+    main_index = range(d, n + 1)
+    if d > 1:
+        for value in main_index:
+            next_index = d - 1
+            yield from indices_subgenerator(
+                next_index, range(next_index, value + 1), value
+            )
+    else:
+        for value in main_index:
+            yield value,
 
 
 def _jsf_uniform_orderstat_3d(u, n, verbose=False):
@@ -440,8 +472,7 @@ def _jsf_uniform_orderstat_3d(u, n, verbose=False):
 
     # Define ranges [1,...,n], [2,...,n], ..., [d,...,n] for the mute variables
     # used to compute the integral as a sum over all possibilities
-    lists = [range(j, n + 1) for j in range(d, 0, -1)]
-    it_todo = np.prod([n + 1 - j for j in range(d, 0, -1)])
+    it_todo = num_iterations(n, d)
 
     log_1 = np.log(1.)
     # Compute the log of the integral's coefficient
@@ -474,7 +505,7 @@ def _jsf_uniform_orderstat_3d(u, n, verbose=False):
     # initialise probabilities to 0
     P_total = np.zeros(du.shape[0], dtype=np.float32)
     iter_id = 0
-    for matrix_entries in tqdm(itertools.product(*lists),
+    for matrix_entries in tqdm(iterate_indices(n, d),
                                total=it_todo,
                                desc="Joint survival function",
                                disable=not verbose):
@@ -484,10 +515,6 @@ def _jsf_uniform_orderstat_3d(u, n, verbose=False):
             continue
 
         iter_id += 1
-
-        # test for valid pyramid and exit loop early
-        if _wrong_order(matrix_entries):
-            continue
 
         # we only need the differences of the indices:
         di = -np.diff(matrix_entries, prepend=n, append=0)
