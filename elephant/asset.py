@@ -389,18 +389,61 @@ def _interpolate_signals(signals, sampling_times, verbose=False):
 
 
 def _num_iterations(n, d):
+    if d == 1:
+        return n
+    else:
+        # Create square matrix with diagonal values equal to 2 to `n`.
+        # Start from row/column with index == 2 to facilitate indexing.
+        count_matrix = np.zeros((n + 1, n + 1), dtype=int)
+        count_matrix[np.diag_indices_from(count_matrix)] = np.array(
+            range(n + 1))
+        count_matrix[0:2, 0:2] = 0
 
-    def accumulate_num_iterations(cur_d, max_n):
-        if cur_d > 1:
-            sum = 0
-            for cur_value in range(cur_d, max_n + 1):
-                next_d = cur_d - 1
-                sum += accumulate_num_iterations(next_d, cur_value)
-            return sum
+        if d == 2:
+            return np.sum(count_matrix)
         else:
-            return len(range(cur_d, max_n + 1))
+            # Accumulate counts of all iterations where the first index
+            # is in the interval `d` to `n`.
+            #
+            # The counts for every level is obtained by accumulating the
+            # `count_matrix`, which is the count of iterations with the first
+            # index between `d` and `n`, when `d` = 2.
+            #
+            # For every value from 3 to `d`...
+            # 1. Define each row `n` in the count matrix as the sum of all rows
+            #    equal or above.
+            # 2. Set all rows above the current value of `d` with zeros.
+            #
+            # Example for `n` = 6 and `d` = 4:
+            #
+            #  d = 2 (start)                d = 3
+            #        count                        count
+            #  n                            n
+            #  2     2  0  0  0  0
+            #  3     0  3  0  0  0    ==>   3     2  3  0  0  0    ==>
+            #  4     0  0  4  0  0          4     2  3  4  0  0
+            #  5     0  0  0  5  0          5     2  3  4  5  0
+            #  6     0  0  0  0  6          6     2  3  4  5  6
+            #
+            #  d = 4
+            #        count
+            #  n
+            #
+            #  4     4  6  4  0  0
+            #  5     6  9  8  5  0
+            #  6     8  12 12 10 6
+            #
+            #  The total number is the sum of the `count_matrix` when `d` has
+            #  the value passed to the function.
+            #
 
-    return accumulate_num_iterations(d, n)
+            for cur_d in range(3, d + 1):
+                for cur_n in range(n, 2, -1):
+                    count_matrix[cur_n, :] = np.sum(
+                        count_matrix[:cur_n + 1, :], axis=0)
+                # Set previous `d` level to zeros
+                count_matrix[cur_d - 1, :] = np.zeros(n + 1, dtype=int)
+            return np.sum(count_matrix)
 
 
 def _indices_subgenerator(index, range_object, *values):
