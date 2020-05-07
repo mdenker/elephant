@@ -455,8 +455,7 @@ def _indices_subgenerator(index, range_object, *values):
                                              *values, value)
     else:
         for value in range_object:
-            result = *values, value
-            yield result
+            yield (*values, value)
 
 
 def _iterate_indices(n, d):
