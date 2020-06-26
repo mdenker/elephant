@@ -446,17 +446,17 @@ def _num_iterations(n, d):
             return np.sum(count_matrix)
 
 
-def _indices_subgenerator(index, range_object, *values):
+def _indices_subgenerator(index, range_object, values):
     if index > 1:
         for value in range_object:
             next_index = index - 1
             for i in _indices_subgenerator(next_index,
                                            range(next_index, value + 1),
-                                           *values, value):
+                                           values + (value,)):
                 yield i
     else:
         for value in range_object:
-            yield (*values, value)
+            yield values + (value,)
 
 
 def _iterate_indices(n, d):
@@ -466,7 +466,7 @@ def _iterate_indices(n, d):
             next_index = d - 1
             for i in _indices_subgenerator(next_index,
                                            range(next_index, value + 1),
-                                           value):
+                                           (value,)):
                 yield i
     else:
         for value in main_index:
