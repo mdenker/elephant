@@ -450,9 +450,10 @@ def _indices_subgenerator(index, range_object, *values):
     if index > 1:
         for value in range_object:
             next_index = index - 1
-            yield from _indices_subgenerator(next_index,
-                                             range(next_index, value + 1),
-                                             *values, value)
+            for i in _indices_subgenerator(next_index,
+                                           range(next_index, value + 1),
+                                           *values, value):
+                yield i
     else:
         for value in range_object:
             yield (*values, value)
@@ -463,9 +464,10 @@ def _iterate_indices(n, d):
     if d > 1:
         for value in main_index:
             next_index = d - 1
-            yield from _indices_subgenerator(
-                next_index, range(next_index, value + 1), value
-            )
+            for i in _indices_subgenerator(next_index,
+                                           range(next_index, value + 1),
+                                           value):
+                yield i
     else:
         for value in main_index:
             yield value,
