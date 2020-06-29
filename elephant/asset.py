@@ -441,7 +441,7 @@ def _num_iterations(n, d):
             count_matrix[cur_n, :] = np.sum(count_matrix[:cur_n + 1, :],
                                             axis=0)
         # Set previous `d` level to zeros
-        count_matrix[cur_d - 1, :] = np.zeros(n + 1, dtype=int)
+        count_matrix[cur_d - 1, :] = 0
     return np.sum(count_matrix)
 
 
@@ -461,8 +461,8 @@ def _indices_subgenerator(index, range_object, values):
 def _iterate_indices(n, d):
     main_index = range(d, n + 1)
     if d > 1:
+        next_index = d - 1
         for value in main_index:
-            next_index = d - 1
             for i in _indices_subgenerator(next_index,
                                            range(next_index, value + 1),
                                            (value,)):
