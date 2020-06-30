@@ -445,31 +445,80 @@ def _num_iterations(n, d):
     return np.sum(count_matrix)
 
 
-def _indices_subgenerator(index, range_object, values):
+def _indices_subgenerator(index, range_object, previous_values):
+    # Generates the values for a given index, considering the current values
+    # of larger indexes.
+    #
+    # `index` : number of this index, from the range [1..d]
+    # `range_object` : all possible values that this index can take given
+    #                  the current value of the previous index
+    #                  (i.e., `index-1`)
+    # `previous_values` : current values of all the indexes larger than
+    #                     `index`
+    #
+    # The generator is called recursively with `index-1`, until `index` == 1.
+    #
+    # Example: if `index` == 2, and the values of the previous indexes are
+    #          (5,5,4), this generator will yield values from 2 to 4, i.e.,
+    #
+    #          (5,5,4,2)
+    #          (5,5,4,3)
+    #          (5,5,4,4)
+    #
+    #          Each of this tuples is passed as `previous_values` when
+    #          calling `_indices_subgenerator` with `index` = 1. The
+    #          `range_object` for this next call will be defined based on the
+    #          current value, i.e.:
+    #
+    #          (5,5,4,2)  ->  [1..2]
+    #          (5,5,4,3)  ->  [1..3]
+    #          (5,5,4,4)  ->  [1..4]
+
     if index > 1:
-        for value in range_object:
+        for index_value in range_object:
             next_index = index - 1
-            for i in _indices_subgenerator(next_index,
-                                           range(next_index, value + 1),
-                                           values + (value,)):
-                yield i
+            for indices_tuple in _indices_subgenerator(next_index,
+                                           range(next_index, index_value + 1),
+                                           previous_values + (index_value,)):
+                yield indices_tuple
     else:
-        for value in range_object:
-            yield values + (value,)
+        # Last index
+        # Iterate over the valid range and return the tuple with the current
+        # values of all previous indexes plus the current value of the last
+        # index
+        for index_value in range_object:
+            yield previous_values + (index_value,)
 
 
 def _iterate_indices(n, d):
+    # Main generator for the indices tuple.
+    #
+    # It yields a tuple with `d` elements.
+    #
+    # The first index has values in the range from [d..n].
+    # The last index has range from [1..n].
+    # Each index range starts 1 unit below the range of the previous index:
+    #
+    # index    d        d-1        d-2       ...  1
+    # values   [d..n]   [d-1..n]   [d-2..n]  ...  [1..n]
+    #
+    #
+    # For a given index, the values of smaller indexes can't be larger, i.e.
+    # (5,4,4,4,3), but not (5,4,5,4,3) or (5,4,3,4,3)
+
     main_index = range(d, n + 1)
     if d > 1:
         next_index = d - 1
-        for value in main_index:
-            for i in _indices_subgenerator(next_index,
-                                           range(next_index, value + 1),
-                                           (value,)):
-                yield i
+        for main_value in main_index:
+            for indices_tuple in _indices_subgenerator(
+                                           next_index,
+                                           range(next_index, main_value + 1),
+                                           (main_value,)):
+                yield indices_tuple
     else:
-        for value in main_index:
-            yield value,
+        # When `d` == 1, yields a single value tuple from 1 to `n`
+        for main_value in main_index:
+            yield main_value,
 
 
 def _jsf_uniform_orderstat_3d(u, n, verbose=False):
