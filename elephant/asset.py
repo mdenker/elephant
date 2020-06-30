@@ -401,12 +401,12 @@ def _num_iterations(n, d):
     np.fill_diagonal(count_matrix, np.arange(n + 1))
     count_matrix[1, 1] = 0
 
-    # Accumulate counts of all iterations where the first index
+    # Accumulate counts of all the iterations where the first index
     # is in the interval `d` to `n`.
     #
     # The counts for every level is obtained by accumulating the
     # `count_matrix`, which is the count of iterations with the first
-    # index between `d` and `n`, when `d` = 2.
+    # index between `d` and `n`, when `d` == 2.
     #
     # For every value from 3 to `d`...
     # 1. Define each row `n` in the count matrix as the sum of all rows
@@ -465,7 +465,7 @@ def _indices_subgenerator(index, range_object, previous_values):
     #          (5,5,4,3)
     #          (5,5,4,4)
     #
-    #          Each of this tuples is passed as `previous_values` when
+    #          Each of these tuples is passed as `previous_values` when
     #          calling `_indices_subgenerator` with `index` = 1. The
     #          `range_object` for this next call will be defined based on the
     #          current value, i.e.:
