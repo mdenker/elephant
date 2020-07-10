@@ -1226,7 +1226,7 @@ def compound_poisson_process(
     if not isinstance(A, np.ndarray):
         A = np.array(A)
     # Check A is a probability distribution (it sums to 1 and is positive)
-    if abs(sum(A) - 1) > np.finfo('float').eps:
+    if abs(sum(A) - 1) > 1e-6:
         raise ValueError(
             'A must be a probability vector,'
             ' sum(A)= %f !=1' % (sum(A)))
