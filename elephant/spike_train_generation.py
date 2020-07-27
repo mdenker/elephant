@@ -1099,7 +1099,7 @@ def _cpp_hom_stat(A, t_stop, rate, t_start=0 * pq.ms):
     except MemoryError:  # Slower (~2x) but less memory-consuming approach
         print('memory case')
         for mother_spiketrain, label in zip(mother, labels):
-            train_ids = np.random.choice(n_spiketrains, label)
+            train_ids = np.random.choice(n_spiketrains, label, replace=False)
             for train_id in train_ids:
                 spiketrains[train_id].append(mother_spiketrain)
 
@@ -1171,8 +1171,69 @@ def _cpp_het_stat(A, t_stop, rates, t_start=0. * pq.ms):
             in zip(compound_poisson_spiketrains, poisson_spiketrains)]
 
 
+def _cpp_het_stat_nonuniform(A, t_stop, rates, t_start=0. * pq.ms):
+    """
+    Generate a Compound Poisson Process (CPP) with amplitude distribution
+    A and heterogeneous firing rates r=r[0], r[1], ..., r[-1].
+    The assignment distribution is given by the normalised rate vector,
+    so a higher rate also corresponds to a higher probability to
+    participate in synchronous events.
+
+    Parameters
+    ----------
+    A : np.ndarray
+        CPP's amplitude distribution. A[j] represents the probability of
+        a synchronous event of size j among the generated spike trains.
+        The sum over all entries of A must be equal to one.
+    t_stop : pq.Quantity
+        The end time of the output spike trains
+    rates : pq.Quantity
+        Array of firing rates of each spike train generated with
+    t_start : pq.Quantity, optional
+        The start time of the output spike trains
+        Default: 0 pq.ms
+
+    Returns
+    -------
+    list of neo.SpikeTrain
+        List of neo.SpikeTrains with different firing rates, forming
+        a CPP with amplitude distribution `A`.
+    """
+
+    # Computation of Parameters of the two CPPs that will be merged
+    # (uncorrelated with heterog. rates + correlated with homog. rates)
+    n_spiketrains = len(rates)  # number of output spike trains
+    # amplitude expectation
+    expected_amplitude = np.dot(A, np.arange(n_spiketrains + 1))
+    r_sum = np.sum(rates)  # sum of all output firing rates
+
+    # rate of the correlated CPP
+    r_correlated = r_sum / expected_amplitude
+    # rate of the hidden mother process
+    r_mother = r_correlated
+
+    # Generate mother process and associated spike labels
+    mother = _mother_proc_cpp_stat(
+        A=A, t_stop=t_stop, rate=r_mother, t_start=t_start)
+    labels = _sample_int_from_pdf(A, len(mother))
+
+    # normalise rates to get the assignment distribution
+    p_assignment = rates.magnitude.flatten()
+    p_assignment /= p_assignment.sum()
+
+    spiketrains = [[]] * n_spiketrains
+    for spike, label in zip(mother, labels):
+        train_ids = np.random.choice(n_spiketrains, label,
+                                     replace=False, p=p_assignment)
+        for train_id in train_ids:
+            spiketrains[train_id].append(spike)
+
+    return [neo.SpikeTrain(times=spiketrain, t_start=t_start, t_stop=t_stop)
+            for spiketrain in spiketrains]
+
+
 def compound_poisson_process(
-        rate, A, t_stop, shift=None, t_start=0 * pq.ms):
+        rate, A, t_stop, assign_by_rate=False, shift=None, t_start=0 * pq.ms):
     """
     Generate a Compound Poisson Process (CPP; see _[1]) with a given amplitude
     distribution A and stationary marginal rates r.
@@ -1246,6 +1307,9 @@ def compound_poisson_process(
         compound_poisson_spiketrains = _cpp_hom_stat(
             A=A, t_stop=t_stop, rate=rate, t_start=t_start)
     # Heterogeneous rates
+    elif assign_by_rate:
+        compound_poisson_spiketrains = _cpp_het_stat_nonuniform(
+            A=A, t_stop=t_stop, rates=rate, t_start=t_start)
     else:
         compound_poisson_spiketrains = _cpp_het_stat(
             A=A, t_stop=t_stop, rates=rate, t_start=t_start)
