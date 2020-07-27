@@ -1228,7 +1228,8 @@ def _cpp_het_stat_nonuniform(A, t_stop, rates, t_start=0. * pq.ms):
         for train_id in train_ids:
             spiketrains[train_id].append(spike)
 
-    return [neo.SpikeTrain(times=spiketrain, t_start=t_start, t_stop=t_stop)
+    return [neo.SpikeTrain(times=spiketrain, units=mother.units,
+                           t_start=t_start, t_stop=t_stop)
             for spiketrain in spiketrains]
 
 
