@@ -11,7 +11,7 @@ from quantities import Hz, ms, second
 
 import elephant.spike_train_generation as stgen
 from elephant.spike_train_synchrony import Synchrotool, spike_contrast, \
-    _get_theta_and_n_per_bin, _binning_half_overlap
+    _binning_half_overlap
 from elephant.test.download import download, unzip
 
 
@@ -145,19 +145,6 @@ class TestSpikeContrast(unittest.TestCase):
         synchrony = spike_contrast(spiketrains_shifted)
         self.assertAlmostEqual(synchrony, synchrony_target)
 
-    def test_get_theta_and_n_per_bin(self):
-        spike_trains = [
-            [1, 2, 3, 9],
-            [1, 2, 3, 9],
-            [1, 2, 2.5]
-        ]
-        theta, n = _get_theta_and_n_per_bin(spike_trains,
-                                                t_start=0,
-                                                t_stop=10,
-                                                bin_size=5)
-        assert_array_equal(theta, [9, 3, 2])
-        assert_array_equal(n, [3, 3, 2])
-
     def test_binning_half_overlap(self):
         spiketrain = np.array([1, 2, 3, 9])
         bin_step = 5 / 2
@@ -186,10 +173,7 @@ class TestSpikeContrast(unittest.TestCase):
         with open(filepath) as read_file:
             data = json.load(read_file)
 
-        # for the sake of compute time, take the first 5 networks
-        networks_subset = tuple(data.values())[:5]
-
-        for network_simulations in networks_subset:
+        for network_simulations in data.values():
             for simulation in network_simulations.values():
                 synchrony_true = simulation['synchrony']
                 spiketrains = [

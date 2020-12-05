@@ -18,12 +18,15 @@ Synchrony Measures
 """
 from __future__ import division, print_function, unicode_literals
 
+import math
 from collections import namedtuple
 from copy import deepcopy
 
 import neo
 import numpy as np
 import quantities as pq
+from numba import njit, prange
+from numba.typed import List
 
 from elephant.statistics import Complexity
 from elephant.utils import is_time_quantity, check_same_units
@@ -39,26 +42,26 @@ __all__ = [
 ]
 
 
-def _get_theta_and_n_per_bin(spiketrains, t_start, t_stop, bin_size):
+@njit(cache=True, nogil=True, parallel=True)
+def _get_theta_and_n_per_bin(spiketrains, edges):
     """
     Calculates theta (amount of spikes per bin) and the amount of active spike
     trains per bin of one spike train.
     """
-    bin_step = bin_size / 2
-    edges = np.arange(t_start, t_stop + bin_step, bin_step)
-    # Calculate histogram for every spike train
-    histogram = np.vstack([
-        _binning_half_overlap(st, edges=edges)
-        for st in spiketrains
-    ])
-    # Amount of spikes per bin
-    theta = histogram.sum(axis=0)
-    # Amount of active spike trains per bin
-    n_active_per_bin = np.count_nonzero(histogram, axis=0)
-
+    # TODO: use this optimized function once
+    #       https://github.com/numba/numba/issues/4807 is resolved
+    n_edges = len(edges) - 2
+    theta = np.zeros(n_edges, dtype=np.int64)
+    n_active_per_bin = np.zeros(n_edges, dtype=np.int64)
+    for i in prange(len(spiketrains)):
+        hist, bin_edges = np.histogram(spiketrains[i], bins=edges)
+        hist = hist[:-1] + hist[1:]
+        theta += hist
+        n_active_per_bin += hist > 0
     return theta, n_active_per_bin
 
 
+@njit(cache=True, nogil=True)
 def _binning_half_overlap(spiketrain, edges):
     """
     Referring to [1] overlapping the bins creates a better result.
@@ -66,6 +69,46 @@ def _binning_half_overlap(spiketrain, edges):
     histogram, bin_edges = np.histogram(spiketrain, bins=edges)
     histogram = histogram[:-1] + histogram[1:]
     return histogram
+
+
+@njit(cache=True)
+def _spike_contrast(spiketrains, t_start, t_stop, bin_sizes):
+    n_spiketrains = len(spiketrains)
+    n_spikes_total = 0
+    for st in spiketrains:
+        n_spikes_total += len(st)
+    n_bins = len(bin_sizes)
+
+    contrast_list = np.empty(n_bins)
+    active_spiketrains = np.empty(n_bins)
+    synchrony_curve = np.empty(n_bins)
+    for bid in range(n_bins):
+        bin_step = bin_sizes[bid] / 2
+        edges = np.arange(t_start, t_stop + bin_step, bin_step,
+                          dtype=np.float32)
+
+        # Calculate Theta and n
+        # theta_k, n_k = _get_theta_and_n_per_bin(spiketrains, edges=edges)
+
+        n_edges = len(edges) - 2
+        theta_k = np.zeros(n_edges, dtype=np.int64)
+        n_k = np.zeros(n_edges, dtype=np.int64)
+        for st in spiketrains:
+            histogram = _binning_half_overlap(st, edges=edges)
+            theta_k += histogram
+            n_k += histogram > 0
+
+        # calculate synchrony_curve = contrast * active_st
+        active_st = ((n_k * theta_k).sum() / theta_k.sum() - 1) / (
+                n_spiketrains - 1)
+        contrast = np.abs(np.diff(theta_k)).sum() / (2 * n_spikes_total)
+        # Contrast: sum(|derivation|) / (2*#Spikes)
+        synchrony = contrast * active_st
+
+        contrast_list[bid] = contrast
+        active_spiketrains[bid] = active_st
+        synchrony_curve[bid] = synchrony
+    return contrast_list, active_spiketrains, synchrony_curve
 
 
 def spike_contrast(spiketrains, t_start=None, t_stop=None,
@@ -124,7 +167,7 @@ def spike_contrast(spiketrains, t_start=None, t_stop=None,
 
           `.synchrony` - the product of `contrast` and `active_spiketrains`;
 
-          `.bin_size` - the X axis, a list of bin sizes that correspond to
+          `.bin_size` - the X axis, array of bin sizes that correspond to
           these traces.
 
     Raises
@@ -177,11 +220,8 @@ def spike_contrast(spiketrains, t_start=None, t_stop=None,
     t_stop = t_stop.rescale(units).item()
     min_bin = min_bin.rescale(units).item()
 
-    spiketrains = [times[(times >= t_start) & (times <= t_stop)]
-                   for times in spiketrains]
-
-    n_spiketrains = len(spiketrains)
-    n_spikes_total = sum(map(len, spiketrains))
+    spiketrains = [st[(st >= t_start) & (st <= t_stop)].astype(np.float32)
+                   for st in spiketrains]
 
     duration = t_stop - t_start
     bin_max = duration / 2
@@ -192,37 +232,15 @@ def spike_contrast(spiketrains, t_start=None, t_stop=None,
         raise ValueError("All input spiketrains contain no more than 1 spike.")
     bin_min = max(isi_min / 2, min_bin)
 
-    contrast_list = []
-    active_spiketrains = []
-    synchrony_curve = []
+    n_bins = math.ceil(math.log(bin_min / bin_max, bin_shrink_factor))
+    bin_sizes = bin_max * bin_shrink_factor ** np.arange(n_bins)
 
     # Set new time boundaries
     t_start = t_start - isi_min
     t_stop = t_stop + isi_min
-
-    bin_sizes = []
-    bin_size = bin_max
-    while bin_size >= bin_min:
-        bin_sizes.append(bin_size)
-        # Calculate Theta and n
-        theta_k, n_k = _get_theta_and_n_per_bin(spiketrains,
-                                                t_start=t_start,
-                                                t_stop=t_stop,
-                                                bin_size=bin_size)
-
-        # calculate synchrony_curve = contrast * active_st
-        active_st = (np.sum(n_k * theta_k) / np.sum(theta_k) - 1) / (
-                    n_spiketrains - 1)
-        contrast = np.sum(np.abs(np.diff(theta_k))) / (2 * n_spikes_total)
-        # Contrast: sum(|derivation|) / (2*#Spikes)
-        synchrony = contrast * active_st
-
-        contrast_list.append(contrast)
-        active_spiketrains.append(active_st)
-        synchrony_curve.append(synchrony)
-
-        # New bin size
-        bin_size *= bin_shrink_factor
+    contrast_list, active_spiketrains, synchrony_curve = _spike_contrast(
+        spiketrains=List(spiketrains), t_start=t_start, t_stop=t_stop,
+        bin_sizes=bin_sizes)
 
     # Sync value is maximum of the cost function C
     synchrony = max(synchrony_curve)
