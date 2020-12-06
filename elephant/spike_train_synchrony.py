@@ -92,7 +92,7 @@ def _spike_contrast(spiketrains, t_start, t_stop, bin_sizes):
 
         n_edges = len(edges) - 2
         theta_k = np.zeros(n_edges, dtype=np.int64)
-        n_k = np.zeros(n_edges, dtype=np.int64)
+        n_k = np.zeros(n_edges, dtype=np.int32)
         for st in spiketrains:
             histogram = _binning_half_overlap(st, edges=edges)
             theta_k += histogram
@@ -208,17 +208,18 @@ def spike_contrast(spiketrains, t_start=None, t_stop=None,
     if not is_time_quantity(min_bin):
         raise TypeError("'min_bin' must be a time quantity.")
 
-    if t_start is None:
-        t_start = min(st.t_start for st in spiketrains)
-    if t_stop is None:
-        t_stop = max(st.t_stop for st in spiketrains)
-
     # convert everything to spiketrain units
     units = spiketrains[0].units
-    spiketrains = [st.magnitude for st in spiketrains]
-    t_start = t_start.rescale(units).item()
-    t_stop = t_stop.rescale(units).item()
+    if t_start is None:
+        t_start = min(st.t_start.item() for st in spiketrains)
+    else:
+        t_start = t_start.rescale(units).item()
+    if t_stop is None:
+        t_stop = max(st.t_stop.item() for st in spiketrains)
+    else:
+        t_stop = t_stop.rescale(units).item()
     min_bin = min_bin.rescale(units).item()
+    spiketrains = [st.magnitude for st in spiketrains]
 
     spiketrains = [st[(st >= t_start) & (st <= t_stop)].astype(np.float32)
                    for st in spiketrains]
