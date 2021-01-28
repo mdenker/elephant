@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Time warping 
+Time warping
+
+- piecewise linear
+
 
 Background
 ----------
 
 - comparison to traditional trigger alignment
+- challenge if trials of an experiment are not of same timing/duration
+
 
 Functions overview
 ------------------
@@ -17,8 +22,8 @@ Functions overview
 :license: Modified BSD, see LICENSE.txt for details.
 """
 
-import warnings
 from __future__ import division, print_function, unicode_literals
+import warnings
 
 import neo
 from neo import utils
@@ -27,20 +32,20 @@ import quantities as pq
 import copy
 
 __all__ = [
-    "warp_sequence_of_time_points"
+    "warp_sequence_of_time_points",
     "warp_spiketrain_by_knots",
     "warp_list_of_spiketrains_by_knots",
     "warp_event_by_knots",
     "warp_list_of_events_by_knots",
     "warp_epoch_by_knots",
     "warp_list_of_epochs_by_knots",
-    "warp_analogsingal_by_knots",
+    "warp_analogsignal_by_knots",
     "warp_list_of_analogsignals_by_knots",
     "warp_segment_by_events",
 ]
 
 # TODO documentation
-
+# TODO speed up by parallelization
 
 def warp_sequence_of_time_points(sequence_of_time_points,
                                  original_time_knots,
@@ -255,7 +260,6 @@ def warp_analogsignal_by_knots(analogsignal,
             (warping_time_knots[-1] - warping_time_knots[0]
              ).rescale(pq.s) / sampling_rate
         ).magnitude.item())
-        print(sample_count)
 
         warped_analogsignal = neo.IrregularlySampledSignal(
             times=warped_times,
