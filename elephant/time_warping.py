@@ -255,6 +255,7 @@ def warp_analogsignal_by_knots(analogsignal,
             units=analogsignal.units,
             time_units=analogsignal.times.units)
     else:
+        # TODO change this to be a user input
         sampling_rate = 10**-3 * pq.s
         sample_count = int((
             (warping_time_knots[-1] - warping_time_knots[0]
@@ -262,6 +263,7 @@ def warp_analogsignal_by_knots(analogsignal,
         ).magnitude.item())
 
         warped_analogsignal = neo.IrregularlySampledSignal(
+            name='Warped',
             times=warped_times,
             signal=analogsignal,
             units=analogsignal.units,
@@ -366,6 +368,8 @@ def warp_segment_by_events(
     assert(len(original_event_times) == len(new_event_times))
 
     # create a new neo.Segment
+    # TODO this only works for a list of segments if each 
+    # segment has a unique name
     warped_segment = neo.Segment(
         name=f'Warped {segment.name}'
     )
