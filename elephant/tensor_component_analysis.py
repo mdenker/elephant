@@ -18,7 +18,7 @@ from elephant import kernels
 from elephant.statistics import instantaneous_rate
 import numpy as np
 import tensorly as tl
-import tensorly.decomposition.candecomp_parafac
+from tensorly.decomposition import parafac, non_negative_parafac
 
 
 __all__ = [
@@ -151,17 +151,16 @@ def convert_to_tensorly_and_decompose(instantaneous_rate_tensor,
                                       normalize_factors=True):
 
     tensorly_R = tl.tensor(instantaneous_rate_tensor)
-
+    
     if nonnegative:
-        factors_raw = tl.decomposition.non_negative_parafac(tensorly_R,
-                                                            rank=n_factors,
-                                                            verbose=True)
-    else:
-        raise NotImplementedError()
-
-    if normalize_factors:
-        factors, weights = \
-            tl.decomposition.candecomp_parafac.normalize_factors(factors_raw)
-        return factors, weights
-    else:
-        return factors_raw
+        CPtensor = non_negative_parafac(tensorly_R,
+                                    rank=n_factors,
+                                    verbose=verbose,
+                                    normalize_factors=normalize_factors)
+    
+    else: 
+        CPtensor = parafac(tensorly_R,
+                                    rank=n_factors,
+                                    verbose=verbose,
+                                    normalize_factors=normalize_factors)
+    return CPtensor
