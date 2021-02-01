@@ -47,6 +47,8 @@ __all__ = [
 
 # TODO documentation
 # TODO speed up by parallelization
+# TODO put numba into elephant requirements
+# TODO take care of numba deprecation warning for untyped lists
 @numba.jit(nopython=True)
 def warp_sequence_of_time_points(sequence_of_time_points,
                                  original_time_knots,
