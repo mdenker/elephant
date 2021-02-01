@@ -30,6 +30,7 @@ from neo import utils
 import numpy as np
 import quantities as pq
 import copy
+import numba
 
 __all__ = [
     "warp_sequence_of_time_points",
@@ -46,7 +47,7 @@ __all__ = [
 
 # TODO documentation
 # TODO speed up by parallelization
-
+@numba.jit(nopython=True)
 def warp_sequence_of_time_points(sequence_of_time_points,
                                  original_time_knots,
                                  warping_time_knots):
