@@ -85,7 +85,12 @@ def warp_sequence_of_time_points(sequence_of_time_points,
         if knot_idx == 0:
             x_diff = (original_time_knots[1] - original_time_knots[0])
             y_diff = (warping_time_knots[1] - warping_time_knots[0])
-            slope = y_diff / x_diff
+            # cover division by zero
+            if x_diff == 0:
+                # TODO dig into this!
+                slope = 1
+            else:
+                slope = y_diff / x_diff
         else:
             x_diff = (original_time_knots[knot_idx] -
                       original_time_knots[knot_idx-1])
@@ -94,7 +99,6 @@ def warp_sequence_of_time_points(sequence_of_time_points,
         
         # cover division by zero
         if x_diff == 0:
-            print(x_diff, y_diff)
             # TODO dig into this!
             slope = 1
         else:
