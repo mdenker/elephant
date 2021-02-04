@@ -144,7 +144,8 @@ def warp_spiketrain_by_knots(spiketrain,
         units=spiketrain.units)
 
     warped_spiketrain.annotate(**copy.copy(spiketrain.annotations))
-    warped_spiketrain.annotations.pop('nix_name')
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_spiketrain.annotations.pop('nix_name')
 
     return warped_spiketrain
 
@@ -182,7 +183,8 @@ def warp_event_by_knots(event,
 
     warped_event.annotate(**copy.copy(event.annotations))
     warped_event.array_annotate(**copy.copy(event.array_annotations))
-    warped_event.annotations.pop('nix_name')
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_event.annotations.pop('nix_name')
 
     return warped_event
 
@@ -230,7 +232,8 @@ def warp_epoch_by_knots(epoch,
 
     warped_epoch.annotate(**copy.copy(epoch.annotations))
     warped_epoch.array_annotate(**copy.copy(epoch.array_annotations))
-    warped_epoch.annotations.pop('nix_name')
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_epoch.annotations.pop('nix_name')
     return warped_epoch
 
 # TODO documentation
@@ -283,7 +286,8 @@ def warp_analogsignal_by_knots(analogsignal,
     warped_analogsignal.annotate(**copy.copy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
         **copy.copy(analogsignal.array_annotations))
-    warped_analogsignal.annotations.pop('nix_name')
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_analogsignal.annotations.pop('nix_name')
     return warped_analogsignal
 
 # TODO merge list of spiketrains and spiketrain warp
@@ -387,7 +391,8 @@ def warp_segment_by_events(
     warped_segment.annotate(original_event_times=original_event_times,
                             new_event_times=new_event_times,
                             warped_event_labels=new_event_labels)
-    warped_segment.annotations.pop('nix_name')
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_segment.annotations.pop('nix_name')
 
     warped_spiketrains = warp_list_of_spiketrains_by_knots(
         segment.spiketrains,
