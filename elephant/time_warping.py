@@ -85,7 +85,12 @@ def warp_sequence_of_time_points(sequence_of_time_points,
         if knot_idx == 0:
             x_diff = (original_time_knots[1] - original_time_knots[0])
             y_diff = (warping_time_knots[1] - warping_time_knots[0])
-            slope = y_diff / x_diff
+            # cover division by zero
+            if x_diff == 0:
+                # TODO dig into this!
+                slope = 1
+            else:
+                slope = y_diff / x_diff
         else:
             x_diff = (original_time_knots[knot_idx] -
                       original_time_knots[knot_idx-1])
@@ -94,7 +99,6 @@ def warp_sequence_of_time_points(sequence_of_time_points,
         
         # cover division by zero
         if x_diff == 0:
-            print(x_diff, y_diff)
             # TODO dig into this!
             slope = 1
         else:
@@ -143,8 +147,9 @@ def warp_spiketrain_by_knots(spiketrain,
         t_stop=warping_time_knots[-1],
         units=spiketrain.units)
 
-    warped_spiketrain.annotate(**copy.copy(spiketrain.annotations))
-    warped_spiketrain.annotations.pop('nix_name')
+    warped_spiketrain.annotate(**copy.deepcopy(spiketrain.annotations))
+    if 'nix_name' in warped_spiketrain.annotations:
+        warped_spiketrain.annotations.pop('nix_name')
 
     return warped_spiketrain
 
@@ -180,9 +185,10 @@ def warp_event_by_knots(event,
         labels=event.labels,
         units=event.units)
 
-    warped_event.annotate(**copy.copy(event.annotations))
-    warped_event.array_annotate(**copy.copy(event.array_annotations))
-    warped_event.annotations.pop('nix_name')
+    warped_event.annotate(**copy.deepcopy(event.annotations))
+    warped_event.array_annotate(**copy.deepcopy(event.array_annotations))
+    if 'nix_name' in warped_event.annotations:
+        warped_event.annotations.pop('nix_name')
 
     return warped_event
 
@@ -228,9 +234,10 @@ def warp_epoch_by_knots(epoch,
         labels=epoch.labels,
         units=epoch.units)
 
-    warped_epoch.annotate(**copy.copy(epoch.annotations))
-    warped_epoch.array_annotate(**copy.copy(epoch.array_annotations))
-    warped_epoch.annotations.pop('nix_name')
+    warped_epoch.annotate(**copy.deepcopy(epoch.annotations))
+    warped_epoch.array_annotate(**copy.deepcopy(epoch.array_annotations))
+    if 'nix_name' in warped_epoch.annotations:
+        warped_epoch.annotations.pop('nix_name')
     return warped_epoch
 
 # TODO documentation
@@ -273,17 +280,18 @@ def warp_analogsignal_by_knots(analogsignal,
         ).magnitude.item())
 
         warped_analogsignal = neo.IrregularlySampledSignal(
-            name='Warped',
+            name=f'Warped {analogsignal.name}',
             times=warped_times,
             signal=analogsignal,
             units=analogsignal.units,
             time_units=analogsignal.times.units).resample(
                 sample_count=sample_count)
 
-    warped_analogsignal.annotate(**copy.copy(analogsignal.annotations))
+    warped_analogsignal.annotate(**copy.deepcopy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
-        **copy.copy(analogsignal.array_annotations))
-    warped_analogsignal.annotations.pop('nix_name')
+        **copy.deepcopy(analogsignal.array_annotations))
+    if 'nix_name' in warped_analogsignal.annotations:
+        warped_analogsignal.annotations.pop('nix_name')
     return warped_analogsignal
 
 # TODO merge list of spiketrains and spiketrain warp
@@ -303,16 +311,62 @@ def warp_list_of_analogsignals_by_knots(list_of_analogsignals,
         list_of_warped_analogsignals.append(warped_anasig)
     return list_of_warped_analogsignals
 
+
+def get_warping_knots(segment,
+                      event_name,
+                      new_events_dictionary,
+                      return_labels_of_warped_events=False):
+    
+    # get original event times
+    original_event_times = utils.get_events(
+        container=segment,
+        name=event_name,
+        labels=list(new_events_dictionary.keys())
+        )[0].times
+
+    labels_of_warped_events = list(new_events_dictionary.keys())
+    new_event_times = [time.rescale(pq.s).magnitude.item() for time 
+                       in new_events_dictionary.values()] * pq.s
+    if return_labels_of_warped_events:
+        return original_event_times, new_event_times, labels_of_warped_events
+    return original_event_times, new_event_times
+
+
+def cut_segment_to_warping_time_range(segment,
+                                      event_name,
+                                      new_events_dictionary):
+    
+    starting_warping_knot = utils.get_events(
+        container=segment,
+        name=event_name,
+        labels=list(new_events_dictionary.keys())[0])[0]
+
+    end_warping_knot = utils.get_events(
+        container=segment,
+        name=event_name,
+        labels=list(new_events_dictionary.keys())[-1])[0]
+    
+    warping_epoch = utils.add_epoch(
+        segment,
+        event1=starting_warping_knot,
+        event2=end_warping_knot,
+        attach_result=False,
+        name='Warping Epoch')
+    
+    warping_segment = utils.cut_segment_by_epoch(
+        seg=segment,
+        epoch=warping_epoch,
+        reset_time=True)[0]
+        
+    return warping_segment
+    
 # TODO write another function for just warping t_stop!
-
-
 def warp_segment_by_events(
     segment,
     event_name,
     new_events_dictionary,
-    new_t_stop,
-    irregular_signal=False
-):
+    irregular_signal=False):
+    
     """Warp a neo.Segment by specifying (warped) times of events.
 
     Parameters
@@ -328,8 +382,6 @@ def warp_segment_by_events(
         are the new (pre-defined) event times.
         Internally the original event times will be obtained from the
         segment.
-    new_t_stop : pq.Quantity
-        New stop time of the segment
 
     Returns
     -------
@@ -340,54 +392,34 @@ def warp_segment_by_events(
     warped_segment : neo.Segment
         Warped neo.Segment.
     """
+    
+    segment = cut_segment_to_warping_time_range(segment,
+                                                event_name,
+                                                new_events_dictionary)
 
-    # get original event times
-    original_event_times = []
-    for label, new_event_time in new_events_dictionary.items():
-        # get_events returns a list of neo.Event
-        neo_event = utils.get_events(container=segment,
-                                     name=event_name,
-                                     labels=label)[0]
+    (original_event_times,
+     new_event_times,
+     new_event_labels) = get_warping_knots(segment,
+                                           event_name,
+                                           new_events_dictionary,
+                                           return_labels_of_warped_events=True)    
 
-        # TODO:
-        # check that one unique event has been found
-        # put this in a warning
 
-        assert(len(neo_event) == 1)
-        original_event_times.append(neo_event.times.squeeze())
-
-    new_event_labels = list(new_events_dictionary.keys())
-    new_event_times = list(new_events_dictionary.values())
-
-    # start of real time and warp time should be the same (no shift!)
-    # TODO allow for shifts
-    # TODO check if seg.t_start < spiketrain.t_start is an issue
-    original_event_times.insert(0, segment.t_start)
-    new_event_times.insert(0, segment.t_start)
-    new_event_labels.insert(0, 't_start')
-
-    # TODO put this in a warning
-    assert(new_t_stop >= np.max(list(new_events_dictionary.values())))
-    if new_t_stop not in new_events_dictionary.values():
-        # stop times need to be set explicitely to 
-        # fully define the warping function
-        original_event_times.append(segment.t_stop)
-        new_event_times.append(new_t_stop)
-        new_event_labels.append('t_stop')
 
     assert(len(original_event_times) == len(new_event_times))
 
     # create a new neo.Segment
-    # TODO this only works for a list of segments if each 
+    # TODO proper naming only works for a list of segments if each 
     # segment has a unique name
     warped_segment = neo.Segment(
         name=f'Warped {segment.name}'
     )
-    warped_segment.annotate(**copy.copy(segment.annotations))
+    warped_segment.annotate(**copy.deepcopy(segment.annotations))
     warped_segment.annotate(original_event_times=original_event_times,
                             new_event_times=new_event_times,
                             warped_event_labels=new_event_labels)
-    warped_segment.annotations.pop('nix_name')
+    if 'nix_name' in warped_segment.annotations:
+        warped_segment.annotations.pop('nix_name')
 
     warped_spiketrains = warp_list_of_spiketrains_by_knots(
         segment.spiketrains,
@@ -421,7 +453,6 @@ def warp_list_of_segments_by_events(
         list_of_segments,
         event_name,
         new_events_dictionary,
-        new_t_stop,
         irregular_signal=False):
 
     new_block = neo.Block(name='Block warped by events')
@@ -431,7 +462,6 @@ def warp_list_of_segments_by_events(
             segment,
             event_name,
             new_events_dictionary,
-            new_t_stop,
             irregular_signal)
         new_block.segments.append(warped_segment)
 
