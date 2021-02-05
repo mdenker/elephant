@@ -147,7 +147,7 @@ def warp_spiketrain_by_knots(spiketrain,
         t_stop=warping_time_knots[-1],
         units=spiketrain.units)
 
-    warped_spiketrain.annotate(**copy.copy(spiketrain.annotations))
+    warped_spiketrain.annotate(**copy.deepcopy(spiketrain.annotations))
     if 'nix_name' in warped_spiketrain.annotations:
         warped_spiketrain.annotations.pop('nix_name')
 
@@ -185,9 +185,8 @@ def warp_event_by_knots(event,
         labels=event.labels,
         units=event.units)
 
-    warped_event.annotate(**copy.copy(event.annotations))
-    warped_event.array_annotate(**copy.copy(event.array_annotations))
-    if 'nix_name' in warped_spiketrain.annotations:
+    warped_event.annotate(**copy.deepcopy(event.annotations))
+    warped_event.array_annotate(**copy.deepcopy(event.array_annotations))
         warped_event.annotations.pop('nix_name')
 
     return warped_event
@@ -234,9 +233,8 @@ def warp_epoch_by_knots(epoch,
         labels=epoch.labels,
         units=epoch.units)
 
-    warped_epoch.annotate(**copy.copy(epoch.annotations))
-    warped_epoch.array_annotate(**copy.copy(epoch.array_annotations))
-    if 'nix_name' in warped_spiketrain.annotations:
+    warped_epoch.annotate(**copy.deepcopy(epoch.annotations))
+    warped_epoch.array_annotate(**copy.deepcopy(epoch.array_annotations))
         warped_epoch.annotations.pop('nix_name')
     return warped_epoch
 
@@ -287,10 +285,9 @@ def warp_analogsignal_by_knots(analogsignal,
             time_units=analogsignal.times.units).resample(
                 sample_count=sample_count)
 
-    warped_analogsignal.annotate(**copy.copy(analogsignal.annotations))
+    warped_analogsignal.annotate(**copy.deepcopy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
-        **copy.copy(analogsignal.array_annotations))
-    if 'nix_name' in warped_spiketrain.annotations:
+        **copy.deepcopy(analogsignal.array_annotations))
         warped_analogsignal.annotations.pop('nix_name')
     return warped_analogsignal
 
@@ -391,7 +388,7 @@ def warp_segment_by_events(
     warped_segment = neo.Segment(
         name=f'Warped {segment.name}'
     )
-    warped_segment.annotate(**copy.copy(segment.annotations))
+    warped_segment.annotate(**copy.deepcopy(segment.annotations))
     warped_segment.annotate(original_event_times=original_event_times,
                             new_event_times=new_event_times,
                             warped_event_labels=new_event_labels)
