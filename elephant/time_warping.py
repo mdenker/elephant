@@ -187,6 +187,7 @@ def warp_event_by_knots(event,
 
     warped_event.annotate(**copy.deepcopy(event.annotations))
     warped_event.array_annotate(**copy.deepcopy(event.array_annotations))
+    if 'nix_name' in warped_event.annotations:
         warped_event.annotations.pop('nix_name')
 
     return warped_event
@@ -235,6 +236,7 @@ def warp_epoch_by_knots(epoch,
 
     warped_epoch.annotate(**copy.deepcopy(epoch.annotations))
     warped_epoch.array_annotate(**copy.deepcopy(epoch.array_annotations))
+    if 'nix_name' in warped_epoch.annotations:
         warped_epoch.annotations.pop('nix_name')
     return warped_epoch
 
@@ -288,6 +290,7 @@ def warp_analogsignal_by_knots(analogsignal,
     warped_analogsignal.annotate(**copy.deepcopy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
         **copy.deepcopy(analogsignal.array_annotations))
+    if 'nix_name' in warped_analogsignal.annotations:
         warped_analogsignal.annotations.pop('nix_name')
     return warped_analogsignal
 
@@ -392,7 +395,7 @@ def warp_segment_by_events(
     warped_segment.annotate(original_event_times=original_event_times,
                             new_event_times=new_event_times,
                             warped_event_labels=new_event_labels)
-    if 'nix_name' in warped_spiketrain.annotations:
+    if 'nix_name' in warped_segment.annotations:
         warped_segment.annotations.pop('nix_name')
 
     warped_spiketrains = warp_list_of_spiketrains_by_knots(
