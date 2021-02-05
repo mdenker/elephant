@@ -49,6 +49,8 @@ __all__ = [
 # TODO speed up by parallelization
 # TODO put numba into elephant requirements
 # TODO take care of numba deprecation warning for untyped lists
+
+
 @numba.jit(nopython=True)
 def warp_sequence_of_time_points(sequence_of_time_points,
                                  original_time_knots,
@@ -96,7 +98,7 @@ def warp_sequence_of_time_points(sequence_of_time_points,
                       original_time_knots[knot_idx-1])
             y_diff = (warping_time_knots[knot_idx] -
                       warping_time_knots[knot_idx-1])
-        
+
         # cover division by zero
         if x_diff == 0:
             # TODO dig into this!
@@ -280,13 +282,13 @@ def warp_analogsignal_by_knots(analogsignal,
         ).magnitude.item())
 
         warped_analogsignal = neo.IrregularlySampledSignal(
-            name=f'Warped {analogsignal.name}',
             times=warped_times,
             signal=analogsignal,
             units=analogsignal.units,
             time_units=analogsignal.times.units).resample(
                 sample_count=sample_count)
 
+    warped_analogsignal.name = f'{analogsignal.name}'
     warped_analogsignal.annotate(**copy.deepcopy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
         **copy.deepcopy(analogsignal.array_annotations))
@@ -316,16 +318,16 @@ def get_warping_knots(segment,
                       event_name,
                       new_events_dictionary,
                       return_labels_of_warped_events=False):
-    
+
     # get original event times
     original_event_times = utils.get_events(
         container=segment,
         name=event_name,
         labels=list(new_events_dictionary.keys())
-        )[0].times
+    )[0].times
 
     labels_of_warped_events = list(new_events_dictionary.keys())
-    new_event_times = [time.rescale(pq.s).magnitude.item() for time 
+    new_event_times = [time.rescale(pq.s).magnitude.item() for time
                        in new_events_dictionary.values()] * pq.s
     if return_labels_of_warped_events:
         return original_event_times, new_event_times, labels_of_warped_events
@@ -335,7 +337,7 @@ def get_warping_knots(segment,
 def cut_segment_to_warping_time_range(segment,
                                       event_name,
                                       new_events_dictionary):
-    
+
     starting_warping_knot = utils.get_events(
         container=segment,
         name=event_name,
@@ -345,28 +347,29 @@ def cut_segment_to_warping_time_range(segment,
         container=segment,
         name=event_name,
         labels=list(new_events_dictionary.keys())[-1])[0]
-    
+
     warping_epoch = utils.add_epoch(
         segment,
         event1=starting_warping_knot,
         event2=end_warping_knot,
         attach_result=False,
         name='Warping Epoch')
-    
+
     warping_segment = utils.cut_segment_by_epoch(
         seg=segment,
         epoch=warping_epoch,
         reset_time=True)[0]
-        
+
     return warping_segment
-    
+
 # TODO write another function for just warping t_stop!
+
+
 def warp_segment_by_events(
-    segment,
-    event_name,
-    new_events_dictionary,
-    irregular_signal=False):
-    
+        segment,
+        event_name,
+        new_events_dictionary,
+        irregular_signal=False):
     """Warp a neo.Segment by specifying (warped) times of events.
 
     Parameters
@@ -392,7 +395,7 @@ def warp_segment_by_events(
     warped_segment : neo.Segment
         Warped neo.Segment.
     """
-    
+
     segment = cut_segment_to_warping_time_range(segment,
                                                 event_name,
                                                 new_events_dictionary)
@@ -402,14 +405,12 @@ def warp_segment_by_events(
      new_event_labels) = get_warping_knots(segment,
                                            event_name,
                                            new_events_dictionary,
-                                           return_labels_of_warped_events=True)    
-
-
+                                           return_labels_of_warped_events=True)
 
     assert(len(original_event_times) == len(new_event_times))
 
     # create a new neo.Segment
-    # TODO proper naming only works for a list of segments if each 
+    # TODO proper naming only works for a list of segments if each
     # segment has a unique name
     warped_segment = neo.Segment(
         name=f'Warped {segment.name}'
@@ -442,7 +443,10 @@ def warp_segment_by_events(
         original_event_times,
         new_event_times,
         irregular_signal)
-    warped_segment.irregularlysampledsignals = warped_analogsignals
+    if irregular_signal:
+        warped_segment.irregularlysampledsignals = warped_analogsignals
+    else:
+        warped_segment.analogsignals = warped_analogsignals
 
     warped_segment.create_relationship()
 
