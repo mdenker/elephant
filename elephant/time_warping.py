@@ -143,7 +143,7 @@ def warp_spiketrain_by_knots(spiketrain,
                                                       warping_time_knots)
 
     warped_spiketrain = neo.SpikeTrain(
-        name='Warped Spiketrain',
+        name=f'{spiketrain}',
         times=warped_spike_times,
         t_start=warping_time_knots[0],
         t_stop=warping_time_knots[-1],
@@ -182,7 +182,7 @@ def warp_event_by_knots(event,
                                                       warping_time_knots)
 
     warped_event = neo.Event(
-        name=f'Warped {event.name}',
+        name=f'{event.name}',
         times=warped_event_times,
         labels=event.labels,
         units=event.units)
@@ -230,7 +230,7 @@ def warp_epoch_by_knots(epoch,
     warped_epoch_durations = warped_epoch_stop_times - warped_epoch_start_times
 
     warped_epoch = neo.Epoch(
-        name=f'Warped {epoch.name}',
+        name=f'{epoch.name}',
         times=warped_epoch_start_times,
         durations=warped_epoch_durations,
         labels=epoch.labels,
@@ -355,6 +355,8 @@ def cut_segment_to_warping_time_range(segment,
         attach_result=False,
         name='Warping Epoch')
 
+    # TODO fails if analogsignal t_start is later than first event
+    # or t_stop earlier than last event
     warping_segment = utils.cut_segment_by_epoch(
         seg=segment,
         epoch=warping_epoch,
@@ -413,7 +415,7 @@ def warp_segment_by_events(
     # TODO proper naming only works for a list of segments if each
     # segment has a unique name
     warped_segment = neo.Segment(
-        name=f'Warped {segment.name}'
+        name=f'{segment.name}'
     )
     warped_segment.annotate(**copy.deepcopy(segment.annotations))
     warped_segment.annotate(original_event_times=original_event_times,
