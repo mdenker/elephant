@@ -143,7 +143,7 @@ def warp_spiketrain_by_knots(spiketrain,
                                                       warping_time_knots)
 
     warped_spiketrain = neo.SpikeTrain(
-        name=f'{spiketrain}',
+        name=f'{spiketrain.name}',
         times=warped_spike_times,
         t_start=warping_time_knots[0],
         t_stop=warping_time_knots[-1],
@@ -320,11 +320,21 @@ def get_warping_knots(segment,
                       return_labels_of_warped_events=False):
 
     # get original event times
-    original_event_times = utils.get_events(
+    events = utils.get_events(
         container=segment,
-        name=event_name,
+        # name=event_name,
         labels=list(new_events_dictionary.keys())
-    )[0].times
+        )
+    
+    # merge returned events in case the requested events come from
+    # different neo.Events
+    if len(events) > 1:
+        for i in range(1, len(events)):
+            events[0] = events[0].merge(events[i])
+
+    sort_indices = np.argsort(events[0].times)
+    original_event_labels = events[0].labels[sort_indices]
+    original_event_times = events[0].times[sort_indices]
 
     labels_of_warped_events = list(new_events_dictionary.keys())
     new_event_times = [time.rescale(pq.s).magnitude.item() for time
