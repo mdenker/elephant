@@ -150,6 +150,8 @@ def warp_spiketrain_by_knots(spiketrain,
         units=spiketrain.units)
 
     warped_spiketrain.annotate(**copy.deepcopy(spiketrain.annotations))
+    warped_spiketrain.array_annotate(
+        **copy.deepcopy(spiketrain.array_annotations))
     if 'nix_name' in warped_spiketrain.annotations:
         warped_spiketrain.annotations.pop('nix_name')
 
@@ -318,7 +320,7 @@ def get_warping_knots(segment,
                       event_name,
                       new_events_dictionary,
                       return_labels_of_warped_events=False):
-
+    
     # get original event times
     events = utils.get_events(
         container=segment,
@@ -337,7 +339,7 @@ def get_warping_knots(segment,
     original_event_times = events[0].times[sort_indices]
 
     labels_of_warped_events = list(new_events_dictionary.keys())
-    new_event_times = [time.rescale(pq.s).magnitude.item() for time
+    new_event_times = [time.rescale(pq.s).magnitude.item() for time 
                        in new_events_dictionary.values()] * pq.s
     if return_labels_of_warped_events:
         return original_event_times, new_event_times, labels_of_warped_events
@@ -367,6 +369,8 @@ def cut_segment_to_warping_time_range(segment,
 
     # TODO fails if analogsignal t_start is later than first event
     # or t_stop earlier than last event
+    # print(warping_epoch.times[0], warping_epoch.durations[0], segment.t_start, segment.t_stop, segment.annotations['trial_number'])
+    
     warping_segment = utils.cut_segment_by_epoch(
         seg=segment,
         epoch=warping_epoch,
@@ -377,6 +381,9 @@ def cut_segment_to_warping_time_range(segment,
 # TODO write another function for just warping t_stop!
 
 
+
+
+# TODO write another function for just warping t_stop!
 def warp_segment_by_events(
         segment,
         event_name,
@@ -418,7 +425,6 @@ def warp_segment_by_events(
                                            event_name,
                                            new_events_dictionary,
                                            return_labels_of_warped_events=True)
-
     assert(len(original_event_times) == len(new_event_times))
 
     # create a new neo.Segment
