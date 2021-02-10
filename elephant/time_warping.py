@@ -142,13 +142,15 @@ def warp_spiketrain_by_knots(spiketrain,
                                                       warping_time_knots)
 
     warped_spiketrain = neo.SpikeTrain(
-        name=f'{spiketrain}',
+        name=f'{spiketrain.name}',
         times=warped_spike_times,
         t_start=warping_time_knots[0],
         t_stop=warping_time_knots[-1],
         units=spiketrain.units)
 
     warped_spiketrain.annotate(**copy.deepcopy(spiketrain.annotations))
+    warped_spiketrain.array_annotate(
+        **copy.deepcopy(spiketrain.array_annotations))
     if 'nix_name' in warped_spiketrain.annotations:
         warped_spiketrain.annotations.pop('nix_name')
 
@@ -317,16 +319,26 @@ def get_warping_knots(segment,
                       event_name,
                       new_events_dictionary,
                       return_labels_of_warped_events=False):
-
+    
     # get original event times
-    original_event_times = utils.get_events(
+    events = utils.get_events(
         container=segment,
-        name=event_name,
+        # name=event_name,
         labels=list(new_events_dictionary.keys())
-    )[0].times
+        )
+    
+    # merge returned events in case the requested events come from
+    # different neo.Events
+    if len(events) > 1:
+        for i in range(1, len(events)):
+            events[0] = events[0].merge(events[i])
+
+    sort_indices = np.argsort(events[0].times)
+    original_event_labels = events[0].labels[sort_indices]
+    original_event_times = events[0].times[sort_indices]
 
     labels_of_warped_events = list(new_events_dictionary.keys())
-    new_event_times = [time.rescale(pq.s).magnitude.item() for time
+    new_event_times = [time.rescale(pq.s).magnitude.item() for time 
                        in new_events_dictionary.values()] * pq.s
     if return_labels_of_warped_events:
         return original_event_times, new_event_times, labels_of_warped_events
@@ -356,6 +368,8 @@ def cut_segment_to_warping_time_range(segment,
 
     # TODO fails if analogsignal t_start is later than first event
     # or t_stop earlier than last event
+    # print(warping_epoch.times[0], warping_epoch.durations[0], segment.t_start, segment.t_stop, segment.annotations['trial_number'])
+    
     warping_segment = utils.cut_segment_by_epoch(
         seg=segment,
         epoch=warping_epoch,
@@ -363,57 +377,6 @@ def cut_segment_to_warping_time_range(segment,
 
     return warping_segment
 
-# TODO write another function for just warping t_stop!
-
-
-def get_warping_knots(segment,
-                      event_name,
-                      new_events_dictionary,
-                      return_labels_of_warped_events=False):
-    
-    # get original event times
-    original_event_times = utils.get_events(
-        container=segment,
-        name=event_name,
-        labels=list(new_events_dictionary.keys())
-        )[0].times
-
-    labels_of_warped_events = list(new_events_dictionary.keys())
-    new_event_times = [time.rescale(pq.s).magnitude.item() for time 
-                       in new_events_dictionary.values()] * pq.s
-    if return_labels_of_warped_events:
-        return original_event_times, new_event_times, labels_of_warped_events
-    return original_event_times, new_event_times
-
-
-def cut_segment_to_warping_time_range(segment,
-                                      event_name,
-                                      new_events_dictionary):
-    
-    starting_warping_knot = utils.get_events(
-        container=segment,
-        name=event_name,
-        labels=list(new_events_dictionary.keys())[0])[0]
-
-    end_warping_knot = utils.get_events(
-        container=segment,
-        name=event_name,
-        labels=list(new_events_dictionary.keys())[-1])[0]
-    
-    warping_epoch = utils.add_epoch(
-        segment,
-        event1=starting_warping_knot,
-        event2=end_warping_knot,
-        attach_result=False,
-        name='Warping Epoch')
-    
-    warping_segment = utils.cut_segment_by_epoch(
-        seg=segment,
-        epoch=warping_epoch,
-        reset_time=True)[0]
-        
-    return warping_segment
-    
 # TODO write another function for just warping t_stop!
 def warp_segment_by_events(
         segment,
@@ -456,18 +419,6 @@ def warp_segment_by_events(
                                            event_name,
                                            new_events_dictionary,
                                            return_labels_of_warped_events=True)    
-
-
-    segment = cut_segment_to_warping_time_range(segment,
-                                                event_name,
-                                                new_events_dictionary)
-
-    (original_event_times,
-     new_event_times,
-     new_event_labels) = get_warping_knots(segment,
-                                           event_name,
-                                           new_events_dictionary,
-                                           return_labels_of_warped_events=True)
 
     assert(len(original_event_times) == len(new_event_times))
 
