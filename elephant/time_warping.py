@@ -31,6 +31,7 @@ import numpy as np
 import quantities as pq
 import copy
 import numba
+from scipy.interpolate import interp1d
 
 __all__ = [
     "warp_sequence_of_time_points",
@@ -263,32 +264,73 @@ def warp_list_of_epochs_by_knots(list_of_epochs,
 def warp_analogsignal_by_knots(analogsignal,
                                original_time_knots,
                                warping_time_knots,
-                               irregular_signal=False):
+                               irregular_signal=False,
+                               sampling_period=None,
+                               interpolation_kind='linear'):
+    # TODO clean up documentation
+    """warp analogsignal according to warping knots
+    
+    The time stamps of the analogsignal will be warped, while keeping the 
+    signal untouched. By default, the signal will then be resampled to
+    a regular sampling period by interpolating the signal onto newly
+    defined time stamps.
+
+    Parameters
+    ----------
+    analogsignal : neo.Analogsignal
+        Signal that should be warped.
+    original_time_knots : list
+    warping_time_knots : list
+    irregular_signal : bool, optional
+        If True, only the time points are warped and together with the signal
+        stored in a neo.IrregularlySampledSignal, by default False
+    sampling_period : [pq.Quantity], optional
+        Default takes the same sampling period as the original 
+        analogsignal, by default None
+    interpolation_kind : str, optional
+        by default 'linear'
+
+    Returns
+    -------
+    neo.Analogsignal or neo.IrregularlySampledSignal
+        warped_analogsignal
+    """    
 
     warped_times = warp_sequence_of_time_points(analogsignal.times,
                                                 original_time_knots,
                                                 warping_time_knots)
+    
+    warped_irregularlysampledsignal = neo.IrregularlySampledSignal(
+        times=warped_times,
+        signal=analogsignal,
+        units=analogsignal.units,
+        time_units=analogsignal.times.units)
+    
     if irregular_signal:
-        warped_analogsignal = neo.IrregularlySampledSignal(
-            times=warped_times,
-            signal=analogsignal,
-            units=analogsignal.units,
-            time_units=analogsignal.times.units)
+        warped_analogsignal = warped_irregularlysampledsignal
     else:
-        # TODO change this to be a user input
-        sampling_rate = 10**-3 * pq.s
-        sample_count = int((
-            (warping_time_knots[-1] - warping_time_knots[0]
-             ).rescale(pq.s) / sampling_rate
-        ).magnitude.item())
+        interpolate_function = interp1d(
+            warped_irregularlysampledsignal.times,
+            warped_irregularlysampledsignal,
+            kind=interpolation_kind,
+            axis=0) # interpolate along time axis
+        
+        if sampling_period is None:
+            sampling_period = analogsignal.sampling_period
+        
+        new_time_points = np.arange(
+            warped_irregularlysampledsignal.t_start.rescale(pq.s),
+            warped_irregularlysampledsignal.t_stop.rescale(pq.s),
+            sampling_period)
 
-        warped_analogsignal = neo.IrregularlySampledSignal(
-            times=warped_times,
-            signal=analogsignal,
+        warped_interpolated_data = interpolate_function(new_time_points)
+        warped_analogsignal = neo.AnalogSignal(
+            signal=warped_interpolated_data,
             units=analogsignal.units,
-            time_units=analogsignal.times.units).resample(
-                sample_count=sample_count)
-
+            time_units=analogsignal.times.units,
+            t_start=warped_irregularlysampledsignal.t_start.rescale(pq.s),
+            sampling_period=sampling_period)
+        
     warped_analogsignal.name = f'{analogsignal.name}'
     warped_analogsignal.annotate(**copy.deepcopy(analogsignal.annotations))
     warped_analogsignal.array_annotate(
@@ -303,14 +345,18 @@ def warp_analogsignal_by_knots(analogsignal,
 def warp_list_of_analogsignals_by_knots(list_of_analogsignals,
                                         original_time_knots,
                                         warping_time_knots,
-                                        irregular_signal=False):
+                                        irregular_signal=False,
+                                        sampling_period=None,
+                                        interpolation_kind='linear'):
 
     list_of_warped_analogsignals = []
     for anasig in list_of_analogsignals:
         warped_anasig = warp_analogsignal_by_knots(anasig,
                                                    original_time_knots,
                                                    warping_time_knots,
-                                                   irregular_signal)
+                                                   irregular_signal,
+                                                   sampling_period,
+                                                   interpolation_kind)
         list_of_warped_analogsignals.append(warped_anasig)
     return list_of_warped_analogsignals
 
@@ -382,7 +428,10 @@ def warp_segment_by_events(
         segment,
         event_name,
         new_events_dictionary,
-        irregular_signal=False):
+        irregular_signal=False,
+        sampling_period=None,
+        interpolation_kind='linear'):
+    
     """Warp a neo.Segment by specifying (warped) times of events.
 
     Parameters
@@ -398,6 +447,14 @@ def warp_segment_by_events(
         are the new (pre-defined) event times.
         Internally the original event times will be obtained from the
         segment.
+    irregular_signal : bool, optional
+        If True, only the time points are warped and together with the signal
+        stored in a neo.IrregularlySampledSignal, by default False
+    sampling_period : [pq.Quantity], optional
+        Default takes the same sampling period as the original 
+        analogsignal, by default None
+    interpolation_kind : str, optional
+        by default 'linear'
 
     Returns
     -------
@@ -455,7 +512,9 @@ def warp_segment_by_events(
         segment.analogsignals,
         original_event_times,
         new_event_times,
-        irregular_signal)
+        irregular_signal,
+        sampling_period,
+        interpolation_kind)
     if irregular_signal:
         warped_segment.irregularlysampledsignals = warped_analogsignals
     else:
@@ -470,7 +529,9 @@ def warp_list_of_segments_by_events(
         list_of_segments,
         event_name,
         new_events_dictionary,
-        irregular_signal=False):
+        irregular_signal=False,
+        sampling_period=None,
+        interpolation_kind='linear'):
 
     new_block = neo.Block(name='Block warped by events')
     for seg_idx, segment in enumerate(list_of_segments):
@@ -479,7 +540,9 @@ def warp_list_of_segments_by_events(
             segment,
             event_name,
             new_events_dictionary,
-            irregular_signal)
+            irregular_signal,
+            sampling_period,
+            interpolation_kind)
         new_block.segments.append(warped_segment)
 
     new_block.create_relationship()
