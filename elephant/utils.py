@@ -94,6 +94,52 @@ def _rename_kwargs(func_name, kwargs, aliases):
             kwargs[new] = kwargs.pop(old)
 
 
+def discretise_spiketimes(spiketrains, sampling_rate):
+    """
+    Rounds down all spike times in the input spike train
+    to multiples of the sampling_rate
+
+    Parameters
+    ----------
+    spiketrains : neo.SpikeTrain or list of neo.SpikeTrain
+        The spiketrain(s) to discretise
+    sampling_rate : pq.Quantity
+        The desired sampling rate
+
+    Returns
+    -------
+    neo.SpikeTrain or list of neo.SpikeTrain
+        The discretised spiketrain(s)
+    """
+    check_neo_consistency(spiketrains, object_type=neo.SpikeTrain,
+                          check_type_only=True)
+    was_single_spiketrain = False
+    if not isinstance(spiketrains, (list, tuple)):
+        was_single_spiketrain = True
+        spiketrains = [spiketrains]
+    units = spiketrains[0].times.units
+    mag_sampling_rate = sampling_rate.rescale(1/units).magnitude.flatten()
+    new_spiketrains = []
+    for spiketrain in spiketrains:
+        mag_t_start = spiketrain.t_start.rescale(units).magnitude.flatten()
+        mag_times = spiketrain.times.magnitude.flatten()
+        discrete_times = (mag_times // (1 / mag_sampling_rate)
+                          / mag_sampling_rate)
+        mask = discrete_times < mag_t_start
+        if np.any(mask):
+            warnings.warn(f'{mask.sum()} spike(s) would be before t_start '
+                          'and are set to t_start instead.')
+            discrete_times[mask] = mag_t_start
+        discrete_times *= units
+        new_spiketrain = spiketrain.duplicate_with_new_data(discrete_times)
+        new_spiketrain.annotations = spiketrain.annotations
+        new_spiketrain.sampling_rate = sampling_rate
+        new_spiketrains.append(new_spiketrain)
+    if was_single_spiketrain:
+        new_spiketrains = new_spiketrains[0]
+    return new_spiketrains
+
+
 def is_time_quantity(*quantities, allow_none=False):
     """
     Parameters
@@ -162,8 +208,8 @@ def get_common_start_stop_times(neo_objects):
     return t_start, t_stop
 
 
-def check_neo_consistency(neo_objects, object_type, t_start=None,
-                          t_stop=None, tolerance=1e-8):
+def check_neo_consistency(neo_objects, object_type, check_type_only=False,
+                          t_start=None, t_stop=None, tolerance=1e-8):
     """
     Checks that all input neo objects share the same units, t_start, and
     t_stop.
@@ -205,6 +251,8 @@ def check_neo_consistency(neo_objects, object_type, t_start=None,
             raise TypeError("The input must be a list of "
                             f"{object_type.__name__}. Got "
                             f"{type(neo_obj).__name__}")
+        if check_type_only:
+            continue
         if neo_obj.units != units:
             raise ValueError("The input must have the same units.")
         if t_start is None and abs(neo_obj.t_start.item() - start) > tolerance:
