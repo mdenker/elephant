@@ -724,7 +724,8 @@ class GaussianKernel(SymmetricKernel):
     @deprecated_alias(t='time')
     def cdf(self, time):
         self._check_time_input(time)
-        sigma = self.sigma.rescale(time.units).magnitude
+        sigma = self.sigma.rescale(time.units).magnitude.item()
+        time = time.magnitude.item()
         cdf = scipy.stats.norm.cdf(time, loc=0, scale=sigma)
         return cdf
 
