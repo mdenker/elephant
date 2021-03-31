@@ -744,6 +744,12 @@ def inhomogeneous_gamma_process(rate, shape_factor, as_array=False):
             'rate must be a positive non empty signal, representing the'
             'rate at time t')
 
+    # Check rate is not all zeros, then return empty spike train
+    if np.all(rate == 0):
+        if as_array:
+            return []
+        return neo.SpikeTrain([], units=pq.s, t_stop=rate.t_stop)
+
     # Operational time corresponds to the integral of the firing rate over time
     operational_time = np.cumsum(
         (rate*rate.sampling_period).simplified.magnitude)
