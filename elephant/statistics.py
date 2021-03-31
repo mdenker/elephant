@@ -864,7 +864,7 @@ def instantaneous_rate(spiketrains, sampling_period, kernel='auto',
         fft_mode = 'same'
 
     time_vectors = time_vectors.T  # make it (time, units)
-    kernel_arr = np.expand_dims(kernel(t_arr).rescale(pq.Hz).magnitude, axis=1)
+    kernel_arr = kernel(t_arr).rescale(pq.Hz).magnitude
     rate = scipy.signal.fftconvolve(time_vectors,
                                     kernel_arr,
                                     mode=fft_mode)
