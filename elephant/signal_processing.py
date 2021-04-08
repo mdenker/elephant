@@ -71,7 +71,7 @@ def zscore(signal, inplace=True):
 
     Returns
     -------
-    signal_ztransofrmed : neo.AnalogSignal or list of neo.AnalogSignal
+    signal_ztransformed : neo.AnalogSignal or list of neo.AnalogSignal
         The output format matches the input format: for each input
         `neo.AnalogSignal`, a corresponding `neo.AnalogSignal` is returned,
         containing the z-transformed signal with dimensionless unit.
@@ -153,7 +153,7 @@ def zscore(signal, inplace=True):
     mean = signal_stacked.mean(axis=0)
     std = signal_stacked.std(axis=0)
 
-    signal_ztransofrmed = []
+    signal_ztransformed = []
     for sig in signal:
         sig_normalized = sig.magnitude.astype(mean.dtype, copy=not inplace)
         sig_normalized -= mean
@@ -170,12 +170,12 @@ def zscore(signal, inplace=True):
                                        description=sig.description,
                                        array_annotations=sig.array_annotations,
                                        **sig.annotations)
-        signal_ztransofrmed.append(sig_dimless)
+        signal_ztransformed.append(sig_dimless)
 
     # Return single object, or list of objects
-    if len(signal_ztransofrmed) == 1:
-        signal_ztransofrmed = signal_ztransofrmed[0]
-    return signal_ztransofrmed
+    if len(signal_ztransformed) == 1:
+        signal_ztransformed = signal_ztransformed[0]
+    return signal_ztransformed
 
 
 @deprecated_alias(ch_pairs='channel_pairs', nlags='n_lags',

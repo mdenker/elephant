@@ -43,6 +43,29 @@ class TestUtils(unittest.TestCase):
                            neo.SpikeTrain([1]*pq.s, t_stop=2*pq.s)],
                           object_type=neo.SpikeTrain)
 
+    def test_discretise_spiketimes(self):
+        times = (np.arange(10) + np.random.uniform(size=10)) * pq.ms
+        spiketrains = [neo.SpikeTrain(times, t_stop=10*pq.ms)] * 5
+        discretised_spiketrains = utils.discretise_spiketimes(spiketrains,
+                                                              1/pq.ms)
+        for idx in range(len(spiketrains)):
+            np.testing.assert_array_equal(discretised_spiketrains[idx].times,
+                                          np.arange(10) * pq.ms)
+
+        # test for single spiketrain
+        discretised_spiketrain = utils.discretise_spiketimes(spiketrains[0],
+                                                             1 / pq.ms)
+        np.testing.assert_array_equal(discretised_spiketrain.times,
+                                      np.arange(10) * pq.ms)
+
+        # test that no spike will be before t_start
+        spiketrain = neo.SpikeTrain([0.7, 5.1]*pq.ms,
+                                    t_start=0.5*pq.ms, t_stop=10*pq.ms)
+        discretised_spiketrain = utils.discretise_spiketimes(spiketrain,
+                                                             1 / pq.ms)
+        np.testing.assert_array_equal(discretised_spiketrain.times,
+                                      [0.5, 5] * pq.ms)
+
     def test_round_binning_errors(self):
         with self.assertWarns(UserWarning):
             n_bins = utils.round_binning_errors(0.999999, tolerance=1e-6)
