@@ -1217,5 +1217,127 @@ class WelchCohereTestCase(unittest.TestCase):
             np.all(phase_lag_neo_1dim[:, 0] == phase_lag_neo[:, 0]))
 
 
+class BosEtAl2016PopulationRatePSDTestCase(unittest.TestCase):
+    """
+    Validation of the PSD estimators against the simulated population-rate
+    spectra of Fig. 1E in Bos et al. (2016), PLoS Comput Biol 12(10):
+    e1005132, computed with the authors' original analysis code.
+
+    The original spectrum of the population-normalised spike count x[n]
+    (1 ms bins) is P = |FFT(x)|^2 / (M * dt), i.e., the two-sided
+    periodogram of the population rate r = x / dt. Elephant's one-sided
+    estimates are therefore divided by 2 before comparison.
+
+    Please follow the link below for more details:
+    https://gin.g-node.org/NeuralEnsemble/elephant-data/src/master/unittest/spectral/bos_et_al_2016_population_rate_psd
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        repo_path = \
+            "unittest/spectral/bos_et_al_2016_population_rate_psd/data"
+        files_to_download = [
+            ("bos2016_fig1e_input.npz", "1921206d5a7ff0ce5841e2266811a7f3"),
+            ("bos2016_fig1e_output.npz", "65fe674dab3bc88d539f36b79501e861"),
+        ]
+        paths = {filename: download_datasets(
+            repo_path=f"{repo_path}/{filename}", checksum=checksum)
+            for filename, checksum in files_to_download}
+
+        with np.load(paths["bos2016_fig1e_input.npz"]) as data:
+            cls.bin_size = data['bin_size_ms'] * pq.ms
+            fs = (1 / cls.bin_size).rescale(pq.Hz)
+            # population rates (1/s), shape (time, populations)
+            cls.rate_full = AnalogSignal(
+                data['x_full'].T / cls.bin_size.rescale(pq.s).magnitude,
+                units=1 / pq.s, sampling_rate=fs)
+            x_windows = data['x_windows']
+            cls.len_window = x_windows.shape[-1]
+            cls.rate_windows = AnalogSignal(
+                x_windows.reshape(x_windows.shape[0], -1).T /
+                cls.bin_size.rescale(pq.s).magnitude,
+                units=1 / pq.s, sampling_rate=fs)
+        with np.load(paths["bos2016_fig1e_output.npz"]) as data:
+            cls.freq_1w = data['freq_1w']
+            cls.power_1w = data['power_1w']
+            cls.freq_20w = data['freq_20w']
+            cls.power_20w = data['power_20w']
+
+        # frequency band of Fig. 1E and of the low-gamma peak (~64 Hz)
+        cls.band = (cls.freq_20w >= 10) & (cls.freq_20w <= 400)
+        cls.low_gamma = (40, 100)
+
+    @staticmethod
+    def _to_original(freqs, psd):
+        """Restrict to 0.1 Hz <= f < 500 Hz, convert to a two-sided PSD."""
+        freqs = np.asarray(freqs.rescale(pq.Hz)
+                           if isinstance(freqs, pq.Quantity) else freqs)
+        psd = np.asarray(psd.rescale(1 / pq.s)
+                         if isinstance(psd, pq.Quantity) else psd)
+        mask = (freqs >= 0.1) & (freqs < 500)
+        return freqs[mask], psd[..., mask] / 2
+
+    def _assert_statistically_equivalent(self, freqs, psd):
+        """Compare a smoothed estimate to the 20-window original."""
+        psd_interp = np.array([np.interp(self.freq_20w, freqs, p)
+                               for p in psd])
+        ratio = psd_interp[:, self.band] / self.power_20w[:, self.band]
+        # same level in the band of Fig. 1E, per population
+        np.testing.assert_array_less(
+            np.abs(np.median(ratio, axis=1) - 1), 0.1)
+        # same shape: typical deviation below a factor of 10**0.15 ~ 1.4
+        np.testing.assert_array_less(
+            np.median(np.abs(np.log10(ratio)), axis=1), 0.15)
+        # same low-gamma peak frequency within two frequency bins of the
+        # original 20-window spectrum
+        df = self.freq_20w[1] - self.freq_20w[0]
+        lo, hi = self.low_gamma
+        mask_orig = (self.freq_20w >= lo) & (self.freq_20w <= hi)
+        mask = (freqs >= lo) & (freqs <= hi)
+        peak_orig = self.freq_20w[mask_orig][
+            np.argmax(self.power_20w[:, mask_orig], axis=1)]
+        peak = freqs[mask][np.argmax(psd[:, mask], axis=1)]
+        np.testing.assert_array_less(np.abs(peak - peak_orig), 2 * df)
+
+    def test_welch_psd_single_window_exact(self):
+        # periodogram of the whole signal: rectangular window, no detrending
+        freqs, psd = self._to_original(*elephant.spectral.welch_psd(
+            self.rate_full, len_segment=self.rate_full.shape[0], overlap=0,
+            window='boxcar', detrend=False))
+        np.testing.assert_allclose(freqs, self.freq_1w, rtol=1e-12)
+        np.testing.assert_allclose(psd, self.power_1w, rtol=1e-10)
+
+    def test_welch_psd_20_windows_exact(self):
+        # average of periodograms of 20 non-overlapping 485 ms windows
+        freqs, psd = self._to_original(*elephant.spectral.welch_psd(
+            self.rate_windows, len_segment=self.len_window, overlap=0,
+            window='boxcar', detrend=False))
+        np.testing.assert_allclose(freqs, self.freq_20w, rtol=1e-12)
+        np.testing.assert_allclose(psd, self.power_20w, rtol=1e-10)
+
+    def test_welch_psd_hann_statistical(self):
+        freqs, psd = self._to_original(*elephant.spectral.welch_psd(
+            self.rate_full, len_segment=self.len_window))
+        self._assert_statistically_equivalent(freqs, psd)
+
+    def test_multitaper_psd_statistical(self):
+        freqs, psd = self._to_original(*elephant.spectral.multitaper_psd(
+            self.rate_full, nw=4))
+        self._assert_statistically_equivalent(freqs, psd)
+
+    def test_segmented_multitaper_psd_statistical(self):
+        # applied per population: the result for a single channel is a
+        # one-channel PSD regardless of the output shape for multiple
+        # channels
+        psd = []
+        for channel in range(self.rate_full.shape[1]):
+            freqs, psd_channel = elephant.spectral.segmented_multitaper_psd(
+                self.rate_full[:, channel], len_segment=self.len_window,
+                overlap=0, nw=4)
+            psd.append(np.real(np.squeeze(np.asarray(psd_channel))))
+        freqs, psd = self._to_original(freqs, np.array(psd))
+        self._assert_statistically_equivalent(freqs, psd)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
